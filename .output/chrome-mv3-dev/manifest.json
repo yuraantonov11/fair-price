@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Чесна Ціна (Fair Price)",
+  "description": "Інтелектуальна система моніторингу цін та детекції маніпулятивних знижок",
+  "version": "1.0.0",
+  "permissions": [
+    "storage",
+    "alarms",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://dnipro-m.ua/*",
+    "<all_urls>",
+    "http://localhost/*"
+  ],
+  "commands": {
+    "wxt:reload-extension": {
+      "description": "Reload the extension during development",
+      "suggested_key": {
+        "default": "Alt+R"
+      }
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval' http://localhost:3000; object-src 'self';",
+    "sandbox": "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; sandbox allow-scripts allow-forms allow-popups allow-modals; child-src 'self';"
+  }
+}

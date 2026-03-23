@@ -1,0 +1,28 @@
+{
+  "name": "fair-price-extension",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "build": "wxt build",
+    "zip": "wxt zip",
+    "repomix": "npx repomix"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.100.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.0",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.2.2",
+    "@types/react-dom": "^19.2.3",
+    "@wxt-dev/module-react": "^1.2.2",
+    "repomix": "^1.13.0",
+    "tailwindcss": "^4.2.2",
+    "typescript": "^6.0.2",
+    "wxt": "^0.20.20"
+  }
+}
