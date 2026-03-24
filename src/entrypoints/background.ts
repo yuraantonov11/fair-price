@@ -1,5 +1,4 @@
-// @ts-nocheck
-import { HonestyCalculator } from '@/core/models/HonestyCalculator';
+import { HonestyCalculator } from '@/utils/HonestyCalculator';
 
 interface PriceCheckPayload {
   url: string;
@@ -21,30 +20,28 @@ interface CachedData {
 export default defineBackground(() => {
   console.log("Fair Price Service Worker Loaded");
 
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  chrome.runtime.onMessage.addListener((request: any, sender: chrome.runtime.MessageSender, sendResponse: (response?: any) => void) => {
     if (request.action === "checkPrice") {
-      handleCheckPrice(request.payload as PriceCheckPayload, sendResponse);
-      return true; // Keep the message channel open for async response
+      handleCheckPrice(request.payload as PriceCheckPayload, sendResponse).catch(console.error);
+      return true;
     }
   });
 
   async function handleCheckPrice(payload: PriceCheckPayload, sendResponse: (response?: any) => void) {
     const { sku, currentPrice } = payload;
-    
+
     try {
       console.log(`Checking price for SKU: ${sku}, Price: ${currentPrice}`);
-      
+
       const cachedData = await getLocalPriceHistory(sku);
-      
+
       if (cachedData && isFresh(cachedData.timestamp)) {
         const score = HonestyCalculator.calculate(currentPrice, cachedData.history);
         sendResponse({ success: true, score, history: cachedData.history });
         return;
       }
 
-      // Імітуємо бекенд
       const mockHistory = generateMockHistory(currentPrice);
-      
       const score = HonestyCalculator.calculate(currentPrice, mockHistory);
 
       await saveLocalPriceHistory(sku, mockHistory);
@@ -77,7 +74,6 @@ export default defineBackground(() => {
   }
 
   function isFresh(timestamp: number) {
-    // Cache for 1 hour
     return Date.now() - timestamp < 60 * 60 * 1000;
   }
 
@@ -86,7 +82,6 @@ export default defineBackground(() => {
     const now = Date.now();
     for (let i = 0; i < 60; i++) {
       const date = now - i * 24 * 60 * 60 * 1000;
-      // Simulate some fluctuation
       const price = basePrice * (1 + (Math.random() * 0.2 - 0.1));
       history.push({ date, price });
     }

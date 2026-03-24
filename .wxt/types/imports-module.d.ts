@@ -18,7 +18,6 @@ declare module '#imports' {
   export { InvalidMatchPattern, MatchPattern } from 'wxt/utils/match-patterns';
   export { useState, useCallback, useMemo, useEffect, useRef, useContext, useReducer } from 'react';
   export { fakeBrowser } from 'wxt/testing';
-  export { PriceChart } from '../src/components/PriceChart';
   export { HonestyCalculator, HonestyCalculator } from '../src/utils/HonestyCalculator';
   export { supabase } from '../src/utils/supabase';
 }

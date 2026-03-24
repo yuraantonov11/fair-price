@@ -5,7 +5,6 @@ declare global {
   const HonestyCalculator: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/HonestyCalculator').HonestyCalculator
   const InvalidMatchPattern: typeof import('wxt/utils/match-patterns').InvalidMatchPattern
   const MatchPattern: typeof import('wxt/utils/match-patterns').MatchPattern
-  const PriceChart: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/components/PriceChart').PriceChart
   const browser: typeof import('wxt/browser').browser
   const createIframeUi: typeof import('wxt/utils/content-script-ui/iframe').createIframeUi
   const createIntegratedUi: typeof import('wxt/utils/content-script-ui/integrated').createIntegratedUi

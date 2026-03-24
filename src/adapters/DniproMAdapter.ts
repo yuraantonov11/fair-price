@@ -1,68 +1,60 @@
 import { IPriceAdapter } from './IPriceAdapter';
 
 export class DniproMAdapter implements IPriceAdapter {
+    private productData: any = null;
+
+    constructor() {
+        this.extractJsonLd();
+    }
+
+    isApplicable(): boolean {
+        return window.location.hostname.includes('dnipro-m.ua');
+    }
+
+    // Витягуємо гідратаційні дані
+    private extractJsonLd() {
+        try {
+            const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+            for (const script of Array.from(scripts)) {
+                if (script.textContent && script.textContent.includes('"@type": "Product"')) {
+                    const cleanJson = script.textContent.replace(/\\n/g, '').trim();
+                    const data = JSON.parse(cleanJson);
+
+                    if (data && data['@type'] === 'Product') {
+                        this.productData = data;
+                        break;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('FairPrice JSON-LD Error:', e);
+        }
+    }
 
     getProductID(): string | null {
-        // 1. ЗАПУСКАЄМО РОЗВІДКУ ТУТ (коли DOM вже точно готовий)
-        console.log('🕵️‍♂️ FairPrice: Починаємо сканування прихованих даних сторінки...');
-        this.exploreHydrationData();
-
-        // 2. СТАРИЙ КОД ПОШУКУ ID (щоб віджет продовжував працювати)
+        if (this.productData && this.productData.sku) return this.productData.sku.toString();
         const skuEl = document.querySelector('[data-product-id], .product-code__value');
         let id = skuEl ? skuEl.getAttribute('data-product-id') || skuEl.textContent?.trim() : null;
-
         if (!id) {
             const urlParts = window.location.pathname.split('/').filter(Boolean);
             id = urlParts[urlParts.length - 1];
         }
-
-        console.log('FairPrice: Знайдений ID:', id);
         return id || 'unknown-product';
     }
 
-    // МЕТОД-ШПИГУН
-    exploreHydrationData() {
-        try {
-            // Стратегія 1: JSON-LD (Schema.org) - стандарт для SEO
-            const jsonLdScripts = document.querySelectorAll('script[type="application/ld+json"]');
-            jsonLdScripts.forEach((script, index) => {
-                if (script.textContent && script.textContent.includes('Product')) {
-                    try {
-                        const data = JSON.parse(script.textContent.replace(/\\n/g, '').trim());
-                        console.log(`✅ [Розвідка] Знайдено JSON-LD Product [${index}]:`, data);
-                    } catch (e) {
-                        console.log(`⚠️ [Розвідка] Знайдено JSON-LD, але помилка парсингу:`, script.textContent.substring(0, 100));
-                    }
-                }
-            });
-
-            // Стратегія 2: Внутрішній стан фреймворків (Nuxt.js / Next.js)
-            const frameworkData = document.querySelector('#__NUXT_DATA__, #__NEXT_DATA__');
-            if (frameworkData?.textContent) {
-                console.log(`✅ [Розвідка] Знайдено стан Nuxt/Next:`, JSON.parse(frameworkData.textContent));
-            }
-
-            // Стратегія 3: GTM / DataLayer (Аналітика e-commerce)
-            const allScripts = document.querySelectorAll('script');
-            allScripts.forEach(script => {
-                if (script.textContent && (script.textContent.includes('dataLayer.push') || script.textContent.includes('ecommerce'))) {
-                    console.log('✅ [Розвідка] Знайдено скрипт з e-commerce dataLayer (перші 200 символів):', script.textContent.substring(0, 200) + '...');
-                }
-            });
-
-        } catch (e) {
-            console.error('❌ [Розвідка] Критична помилка сканування:', e);
-        }
+    getTitle(): string | null {
+        if (this.productData && this.productData.name) return this.productData.name;
+        const titleEl = document.querySelector('h1, .product-head__title');
+        return titleEl ? titleEl.textContent?.trim() || null : document.title;
     }
 
     getCurrentPrice(): number | null {
-        const priceEl = document.querySelector('.product-price__current, [itemprop="price"], .price-block__actual, .buy-block__price');
+        if (this.productData?.offers?.price) return parseFloat(this.productData.offers.price);
+        const priceEl = document.querySelector('.product-price__current, [itemprop="price"], .price-block__actual');
         if (priceEl) {
             const parsed = parseInt(priceEl.textContent?.replace(/\D/g, '') || '0', 10);
             if (parsed > 0) return parsed;
         }
-        const metaPrice = document.querySelector('meta[itemprop="price"]');
-        if (metaPrice) return parseInt(metaPrice.getAttribute('content') || '0', 10);
         return null;
     }
 
@@ -74,7 +66,10 @@ export class DniproMAdapter implements IPriceAdapter {
     }
 
     getStockStatus(): boolean {
+        if (this.productData?.offers?.availability) {
+            return this.productData.offers.availability.includes('InStock');
+        }
         const outOfStockEl = document.querySelector('.in-stock--false, .product-status--out-of-stock');
-        return outOfStockEl ? false : true;
+        return !outOfStockEl;
     }
 }

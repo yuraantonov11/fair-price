@@ -1,6 +1,5 @@
-// @ts-nocheck
-import { RozetkaAdapter } from '@/core/adapters/RozetkaAdapter';
-import { DniproMAdapter } from '@/core/adapters/DniproMAdapter';
+import { RozetkaAdapter } from '@/adapters/RozetkaAdapter';
+import { DniproMAdapter } from '@/adapters/DniproMAdapter';
 import { injectUI } from '@/ui/injector';
 
 interface PriceCheckPayload {
@@ -21,8 +20,7 @@ export default defineContentScript({
   matches: ['<all_urls>'],
   main() {
     console.log("FairPrice: Content Script Loaded");
-    
-    // Start application logic
+
     runApp();
 
     function runApp() {
@@ -30,11 +28,11 @@ export default defineContentScript({
         new RozetkaAdapter(),
         new DniproMAdapter()
       ];
-      const currentUrl = window.location.href;
-      
-      console.log("FairPrice: Analyzing URL:", currentUrl);
 
-      const adapter = adapters.find(a => a.isApplicable(currentUrl));
+      console.log("FairPrice: Analyzing URL:", window.location.href);
+
+      // ВИПРАВЛЕНО: isApplicable() тепер викликається без аргументів
+      const adapter = adapters.find(a => a.isApplicable());
 
       if (!adapter) {
         console.log("FairPrice: No adapter found for this site.");
@@ -43,19 +41,17 @@ export default defineContentScript({
 
       console.log("FairPrice: Adapter found:", adapter.constructor.name);
 
-      // Initial check
-      extractAndInject(adapter);
+      extractAndInject(adapter).catch(console.error);
 
-      // Set up MutationObserver to handle SPA navigation/updates
-      let lastUrl = currentUrl;
+      let lastUrl = window.location.href;
       const observer = new MutationObserver(() => {
         if (window.location.href !== lastUrl) {
-            lastUrl = window.location.href;
-            console.log("FairPrice: URL changed, re-checking...");
-            extractAndInject(adapter);
+          lastUrl = window.location.href;
+          console.log("FairPrice: URL changed, re-checking...");
+          extractAndInject(adapter).catch(console.error);
         }
       });
-      
+
       observer.observe(document.body, { childList: true, subtree: true });
     }
 
@@ -68,7 +64,6 @@ export default defineContentScript({
 
       const title = adapter.getTitle();
 
-      // Check if UI is already injected
       if (document.getElementById('fair-price-root')) return;
 
       console.log("FairPrice: Data found. Requesting analysis...", { productId, currentPrice });
@@ -81,21 +76,20 @@ export default defineContentScript({
       };
 
       try {
-        // Send data to background script for analysis
         const response = await chrome.runtime.sendMessage({
-            action: "checkPrice",
-            payload
+          action: "checkPrice",
+          payload
         }) as CheckPriceResponse;
 
         console.log("FairPrice: Analysis received:", response);
 
         if (response && response.success) {
-            injectUI(response.score, response.history);
+          injectUI(response.score, response.history);
         } else {
-            console.error("Fair Price: Failed to get analysis.", response?.error);
+          console.error("Fair Price: Failed to get analysis.", response?.error);
         }
       } catch (e) {
-          console.error("Fair Price: Error sending message", e);
+        console.error("Fair Price: Error sending message", e);
       }
     }
   }
