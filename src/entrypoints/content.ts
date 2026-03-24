@@ -2,6 +2,9 @@ import { RozetkaAdapter } from '@/adapters/RozetkaAdapter';
 import { DniproMAdapter } from '@/adapters/DniproMAdapter';
 import { injectUI } from '@/ui/injector';
 
+// @ts-ignore
+import  '@/assets/tailwind.css';
+
 interface PriceCheckPayload {
   url: string;
   sku: string;
@@ -18,28 +21,17 @@ interface CheckPriceResponse {
 
 export default defineContentScript({
   matches: ['<all_urls>'],
-  main() {
-    console.log("FairPrice: Content Script Loaded");
+  cssInjectionMode: 'ui', // КРИТИЧНО ВАЖЛИВО: ховає Tailwind у Shadow DOM!
 
+  main(ctx) { // <-- ДОДАЛИ ctx СЮДИ
+    console.log("FairPrice: Content Script Loaded");
     runApp();
 
     function runApp() {
-      const adapters = [
-        new RozetkaAdapter(),
-        new DniproMAdapter()
-      ];
-
-      console.log("FairPrice: Analyzing URL:", window.location.href);
-
-      // ВИПРАВЛЕНО: isApplicable() тепер викликається без аргументів
+      const adapters = [new RozetkaAdapter(), new DniproMAdapter()];
       const adapter = adapters.find(a => a.isApplicable());
 
-      if (!adapter) {
-        console.log("FairPrice: No adapter found for this site.");
-        return;
-      }
-
-      console.log("FairPrice: Adapter found:", adapter.constructor.name);
+      if (!adapter) return;
 
       extractAndInject(adapter).catch(console.error);
 
@@ -47,26 +39,18 @@ export default defineContentScript({
       const observer = new MutationObserver(() => {
         if (window.location.href !== lastUrl) {
           lastUrl = window.location.href;
-          console.log("FairPrice: URL changed, re-checking...");
           extractAndInject(adapter).catch(console.error);
         }
       });
-
       observer.observe(document.body, { childList: true, subtree: true });
     }
 
     async function extractAndInject(adapter: any) {
       const productId = adapter.getProductID();
-      if (!productId) return;
-
       const currentPrice = adapter.getCurrentPrice();
-      if (!currentPrice) return;
+      if (!productId || !currentPrice) return;
 
       const title = adapter.getTitle();
-
-      if (document.getElementById('fair-price-root')) return;
-
-      console.log("FairPrice: Data found. Requesting analysis...", { productId, currentPrice });
 
       const payload: PriceCheckPayload = {
         url: window.location.href,
@@ -81,15 +65,12 @@ export default defineContentScript({
           payload
         }) as CheckPriceResponse;
 
-        console.log("FairPrice: Analysis received:", response);
-
         if (response && response.success) {
-          injectUI(response.score, response.history);
-        } else {
-          console.error("Fair Price: Failed to get analysis.", response?.error);
+          // ПЕРЕДАЄМО ctx у функцію малювання!
+          injectUI(ctx, response.score, response.history);
         }
       } catch (e) {
-        console.error("Fair Price: Error sending message", e);
+        console.error("Fair Price: Error", e);
       }
     }
   }
