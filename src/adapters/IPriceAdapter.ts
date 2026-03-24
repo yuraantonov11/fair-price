@@ -5,4 +5,5 @@ export interface IPriceAdapter {
   getCurrentPrice(): number | null;
   getOriginalPrice(): number | null;
   getStockStatus(): boolean;
+  getPromoName(): string | null;
 }

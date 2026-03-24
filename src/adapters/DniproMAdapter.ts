@@ -72,4 +72,9 @@ export class DniproMAdapter implements IPriceAdapter {
         const outOfStockEl = document.querySelector('.in-stock--false, .product-status--out-of-stock');
         return !outOfStockEl;
     }
+
+    getPromoName(): string | null {
+        const badgeEl = document.querySelector('.sticker__text, .badge, .product-badge');
+        return badgeEl ? badgeEl.textContent?.trim() || null : null;
+    }
 }

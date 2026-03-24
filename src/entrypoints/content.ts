@@ -5,11 +5,13 @@ import { injectUI } from '@/ui/injector';
 // @ts-ignore
 import  '@/assets/tailwind.css';
 
-interface PriceCheckPayload {
+  interface PriceCheckPayload {
   url: string;
   sku: string;
   currentPrice: number;
   title: string;
+  oldPrice?: number | null;
+  promoName?: string | null;
 }
 
 interface CheckPriceResponse {
@@ -51,11 +53,15 @@ export default defineContentScript({
       if (!productId || !currentPrice) return;
 
       const title = adapter.getTitle();
+      const oldPrice = adapter.getOriginalPrice();
+      const promoName = adapter.getPromoName();
 
       const payload: PriceCheckPayload = {
         url: window.location.href,
         sku: productId,
         currentPrice,
+        oldPrice,
+        promoName,
         title: title || document.title
       };
 

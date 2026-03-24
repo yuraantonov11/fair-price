@@ -26,4 +26,6 @@ export class RozetkaAdapter implements IPriceAdapter {
   getStockStatus(): boolean {
     return true;
   }
+
+  getPromoName(): string | null { return null; }
 }
