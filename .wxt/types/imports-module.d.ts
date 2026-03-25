@@ -19,5 +19,5 @@ declare module '#imports' {
   export { useState, useCallback, useMemo, useEffect, useRef, useContext, useReducer } from 'react';
   export { fakeBrowser } from 'wxt/testing';
   export { HonestyCalculator, HonestyCalculator } from '../src/utils/HonestyCalculator';
-  export { supabase } from '../src/utils/supabase';
+  export { supabase, saveProductsBatch } from '../src/utils/supabase';
 }

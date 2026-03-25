@@ -7,7 +7,7 @@
     "dev": "wxt",
     "build": "wxt build",
     "zip": "wxt zip",
-    "repomix": "npx repomix"
+    "repomix": "npx repomix --ignore node_modules,docs,dev,.wxt,.idea,.ai,.output"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",

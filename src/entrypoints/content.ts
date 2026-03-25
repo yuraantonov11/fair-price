@@ -59,8 +59,8 @@ export default defineContentScript({
     observer.observe(document.body, { childList: true, subtree: true });
 
     // --- Допоміжна функція ---
+    // --- Допоміжна функція ---
     async function extractAndInject(currentAdapter: any, context: any) {
-      // Чекаємо трохи, щоб скрипти сторінки встигли завантажити дані в dataLayer
       await new Promise(res => setTimeout(res, 500));
 
       const productId = currentAdapter.getProductID();
@@ -71,7 +71,6 @@ export default defineContentScript({
         return;
       }
 
-      // Витягуємо назву акції (тепер асинхронно через dataLayer/JS змінні)
       const promoName = await currentAdapter.getPromoName();
       const oldPrice = currentAdapter.getOriginalPrice();
       const title = currentAdapter.getTitle();
@@ -86,13 +85,23 @@ export default defineContentScript({
       };
 
       try {
+        // ТИМЧАСОВА ПЕРЕВІРКА (щоб віджет точно з'явився, навіть якщо background.ts не працює)
+        console.log("FairPrice Payload prepared:", payload);
+
+        // Малюємо інтерфейс з тестовими даними ПЕРЕД запитом до бекенду
+        injectUI(context, { score: 100, message: "Тестовий запуск" }, [
+          { date: Date.now() - 86400000, price: currentPrice + 500 },
+          { date: Date.now(), price: currentPrice }
+        ]);
+
+        // Реальний запит (може падати, якщо бекенд не готовий)
         const response = await chrome.runtime.sendMessage({
           action: "checkPrice",
           payload
         }) as CheckPriceResponse;
 
         if (response && response.success) {
-          // Малюємо інтерфейс у Shadow DOM
+          // Якщо бекенд відповів - оновлюємо віджет реальними даними
           injectUI(context, response.score, response.history);
         }
       } catch (e) {

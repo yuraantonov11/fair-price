@@ -17,7 +17,6 @@ export async function injectUI(ctx: any, scoreInfo: { score: number, message: st
         position: 'inline',
         anchor: anchor,
         append: 'after',
-        // ДОДАЛИ ТИП: container тепер має тип Element
         onMount: (container: Element) => {
             const root = createRoot(container);
             root.render(
@@ -40,8 +39,7 @@ export async function injectUI(ctx: any, scoreInfo: { score: number, message: st
             );
             return root;
         },
-        // ДОДАЛИ ТИП: root тепер має тип Root (опціонально)
-        onRemove: (root?: Root) => {
+        onRemove: (root: Root | undefined) => {
             root?.unmount();
         },
     });

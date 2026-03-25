@@ -17,6 +17,7 @@ declare global {
   const fakeBrowser: typeof import('wxt/testing').fakeBrowser
   const getAppConfig: typeof import('wxt/utils/app-config').getAppConfig
   const injectScript: typeof import('wxt/utils/inject-script').injectScript
+  const saveProductsBatch: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/supabase').saveProductsBatch
   const storage: typeof import('wxt/utils/storage').storage
   const supabase: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/supabase').supabase
   const useAppConfig: typeof import('wxt/utils/app-config').useAppConfig

@@ -1,7 +1,24 @@
+// src/utils/supabase.ts
 import { createClient } from '@supabase/supabase-js';
+import { ProductData } from '@/adapters/IPriceAdapter';
 
-// ЗАМІНИ НА СВОЇ ДАНІ З SUPABASE
-const supabaseUrl = 'https://mdqcjgxpvvknpehuqrhl.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1kcWNqZ3hwdnZrbnBlaHVxcmhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQwMTA4MDcsImV4cCI6MjA4OTU4NjgwN30.FQ6fH62qThJ6S0FvmU2ZYkcfOvFi3y5cxoPQ1f1hNr4';
-
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const supabase = createClient(supabaseUrl, supabaseKey);
+
+export async function saveProductsBatch(domain: string, products: ProductData[]) {
+    // Викликаємо RPC для кожного знайденого товару
+    const promises = products.map(p =>
+        supabase.rpc('record_price', {
+            p_store_domain: domain,
+            p_external_id: p.externalId,
+            p_url: p.url,
+            p_name: p.name,
+            p_price: p.price,
+            p_regular_price: p.regularPrice,
+            p_is_available: p.isAvailable
+        })
+    );
+
+    await Promise.allSettled(promises);
+}
