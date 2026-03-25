@@ -12,7 +12,16 @@ export default defineConfig({
     version: "1.0.0",
     description: "Інтелектуальна система моніторингу цін та детекції маніпулятивних знижок",
     permissions: ["storage", "alarms"],
-    host_permissions: ["*://dnipro-m.ua/*"]
+    host_permissions: [
+      "*://dnipro-m.ua/*",
+      "*://rozetka.com.ua/*"
+    ],
+    web_accessible_resources: [
+      {
+        resources: ["/pageProvider.js"],
+        matches: ["*://dnipro-m.ua/*", "*://rozetka.com.ua/*"]
+      }
+    ]
   },
   webExt: {
     startUrls: [

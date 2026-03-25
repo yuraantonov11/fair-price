@@ -73,8 +73,65 @@ export class DniproMAdapter implements IPriceAdapter {
         return !outOfStockEl;
     }
 
-    getPromoName(): string | null {
-        const badgeEl = document.querySelector('.sticker__text, .badge, .product-badge');
-        return badgeEl ? badgeEl.textContent?.trim() || null : null;
+    // У DniproMAdapter.ts
+
+    private async getPageVariable(varName: string): Promise<any> {
+        return new Promise((resolve) => {
+            const timeout = setTimeout(() => {
+                console.warn(`[FairPrice] Timeout waiting for ${varName}`);
+                document.removeEventListener('RECEIVE_PAGE_DATA', onDataReceived);
+                resolve(null);
+            }, 2000); // 2 секунди ліміт очікування
+
+            const onDataReceived = (event: any) => {
+                if (event.detail.varName === varName) {
+                    clearTimeout(timeout);
+                    document.removeEventListener('RECEIVE_PAGE_DATA', onDataReceived);
+                    resolve(event.detail.value);
+                }
+            };
+
+            document.addEventListener('RECEIVE_PAGE_DATA', onDataReceived);
+
+            // ВАЖЛИВО: Відправляємо запит
+            document.dispatchEvent(new CustomEvent('GET_PAGE_DATA', {
+                detail: { varName }
+            }));
+        });
+    }
+
+    async getPromoName(): Promise<string | null> {
+        const dl = await this.getPageVariable('dataLayer');
+
+        if (!dl || !Array.isArray(dl)) return null;
+
+        // Шукаємо об'єкт ecommerce, де є view_item або product-details
+        const viewItemEvent = dl.find(item => item.event === 'view_item' || item.ecommerce?.detail);
+
+        if (viewItemEvent && viewItemEvent.ecommerce) {
+            // Структура GTM для товарів зазвичай така:
+            const products = viewItemEvent.ecommerce.items || [viewItemEvent.ecommerce.detail?.products?.[0]];
+            const product = products?.[0];
+
+            if (product) {
+                console.log("[FairPrice] Знайдено товар у dataLayer:", product.item_name || product.name);
+                // Якщо в об'єкті товару є назва акції або знижка:
+                return product.discount || product.coupon || "Акційна ціна";
+            }
+        }
+
+        return null;
+    }
+
+    async injectProvider() {
+        try {
+            // WXT автоматично зробить файл доступним за цим шляхом
+            await injectScript('/pageProvider.js', {
+                keepInDom: false,
+            });
+            console.log("FairPrice: Page Provider injected successfully");
+        } catch (e) {
+            console.error("FairPrice: Injection failed:", e);
+        }
     }
 }
