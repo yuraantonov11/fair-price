@@ -3,10 +3,12 @@ import { supabase } from '@/utils/supabase';
 
 // 🔥 ГОЛОВНИЙ ПЕРЕМИКАЧ:
 // true = генерувати красиві фейкові графіки для розробки UI
-// false = записувати і читати реальні ціни з Supabase
-const USE_MOCK_DATA = true;
+// false = записувати й читати реальні ціни з Supabase
+const USE_MOCK_DATA = false;
 
 interface PriceCheckPayload {
+  promoName: number;
+  oldPrice: number;
   url: string;
   sku: string;
   currentPrice: number;
@@ -49,39 +51,35 @@ export default defineBackground(() => {
 
       let history: PriceHistoryEntry[] = [];
 
-      // 2. РОЗДІЛЕННЯ ЛОГІКИ (TEST vs PROD)
-      if (USE_MOCK_DATA) {
-        console.log(`[DEV MODE] Generating mock data for SKU: ${sku}`);
-        history = generateMockHistory(currentPrice);
-      } else {
-        console.log(`[PROD MODE] Fetching real data from Supabase for SKU: ${sku}`);
-
-        // А) Записуємо сьогоднішню ціну в БД
+      /// ... всередині handleCheckPrice, де йде робота з PROD MODE
+      if (!USE_MOCK_DATA) {
+        // Записуємо дані в Supabase
         const { error: insertError } = await supabase
             .from('prices')
-            .insert([{ sku: sku, price: currentPrice, url: url }]);
+            .insert([{
+              sku: sku,
+              price: currentPrice,
+              old_price: payload.oldPrice, // Додаємо нове поле
+              promo_name: payload.promoName, // Додаємо нове поле
+              url: payload.url
+            }]);
 
-        if (insertError) {
-          console.error("Supabase Insert Error:", insertError);
-        }
+        if (insertError) console.error("Supabase Error:", insertError);
 
-        // Б) Витягуємо всю історію цього товару з БД
+        // Отримуємо історію
         const { data, error: fetchError } = await supabase
             .from('prices')
-            .select('price, created_at')
+            .select('*')
             .eq('sku', sku)
-            .order('created_at', { ascending: true }); // Сортуємо від найстарішої до найновішої
+            .order('created_at', { ascending: true });
 
-        if (fetchError) throw fetchError;
-
-        if (data && data.length > 0) {
+        if (data) {
           history = data.map((row: any) => ({
             price: row.price,
+            oldPrice: row.old_price,
+            promoName: row.promo_name,
             date: new Date(row.created_at).getTime()
           }));
-        } else {
-          // Якщо товар новий і це перший запис
-          history = [{ price: currentPrice, date: Date.now() }];
         }
       }
 
