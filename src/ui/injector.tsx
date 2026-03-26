@@ -1,48 +1,55 @@
-import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
-import { PriceChart } from './PriceChart';
+import { PriceChart } from './components/PriceChart';
 
-let currentUi: any = null;
+let reactRoot: Root | null = null;
+let mountContainer: HTMLElement | null = null;
 
-export async function injectUI(ctx: any, scoreInfo: { score: number, message: string }, history: any) {
-    if (currentUi) {
-        currentUi.remove();
+export async function injectUI(
+    targetContainer: HTMLElement,
+    history: any[],
+    honesty: { score: number; message: string } // Додано honesty
+) {
+    try {
+        cleanupUI();
+
+        mountContainer = document.createElement('div');
+        mountContainer.id = 'fair-price-shadow-host';
+        mountContainer.style.width = '100%';
+        mountContainer.style.marginTop = '20px';
+
+        // Вставляємо ПЕРЕД цільовим контейнером або в нього
+        targetContainer.parentNode?.insertBefore(mountContainer, targetContainer.nextSibling);
+
+        const shadowRoot = mountContainer.attachShadow({ mode: 'open' });
+
+        // Додаємо стилі Tailwind в Shadow DOM
+        const styleLink = document.createElement('style');
+        styleLink.textContent = `
+            :host { all: initial; font-family: sans-serif; display: block; width: 100%; }
+            .fair-price-app { background: #1e293b; padding: 16px; border-radius: 12px; color: white; }
+        `;
+        shadowRoot.appendChild(styleLink);
+
+        const reactContainer = document.createElement('div');
+        reactContainer.className = 'fair-price-app';
+        shadowRoot.appendChild(reactContainer);
+
+        reactRoot = createRoot(reactContainer);
+        reactRoot.render(<PriceChart data={history} honesty={honesty} />);
+
+        console.log('[FairPrice] 🛡️ UI успішно інжектовано');
+    } catch (error) {
+        console.error('[FairPrice] ❌ Помилка інжекту UI:', error);
     }
+}
 
-    const anchor = document.querySelector('.buy-block, .product-price-box, .product-price') || document.body;
-
-    // @ts-ignore
-    currentUi = await createShadowRootUi(ctx, {
-        name: 'fair-price-widget',
-        position: 'inline',
-        anchor: anchor,
-        append: 'after',
-        onMount: (container: Element) => {
-            const root = createRoot(container);
-            root.render(
-                <div className="mt-8 mb-4 p-5 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-slate-100 w-full max-w-md font-sans">
-                    <div className="flex items-center justify-between mb-2">
-                        <h2 className="text-xl font-black text-slate-800 m-0">Чесна Ціна</h2>
-                        <span className={`px-3 py-1 rounded-full text-sm font-bold tracking-wide ${
-                            scoreInfo.score >= 70 ? 'bg-emerald-100 text-emerald-700' :
-                                scoreInfo.score >= 40 ? 'bg-amber-100 text-amber-700' :
-                                    'bg-rose-100 text-rose-700'
-                        }`}>
-              {scoreInfo.score} / 100
-            </span>
-                    </div>
-                    <p className="text-sm text-slate-500 mb-4 leading-relaxed m-0">
-                        {scoreInfo.message || 'Аналіз динаміки зміни вартості товару.'}
-                    </p>
-                    <PriceChart data={history} />
-                </div>
-            );
-            return root;
-        },
-        onRemove: (root: Root | undefined) => {
-            root?.unmount();
-        },
-    });
-
-    currentUi.mount();
+export function cleanupUI() {
+    if (reactRoot) {
+        reactRoot.unmount();
+        reactRoot = null;
+    }
+    if (mountContainer) {
+        mountContainer.remove();
+        mountContainer = null;
+    }
 }

@@ -16,12 +16,6 @@ export default defineConfig({
       "*://dnipro-m.ua/*",
       "*://rozetka.com.ua/*"
     ],
-    web_accessible_resources: [
-      {
-        resources: ["/pageProvider.js"],
-        matches: ["*://dnipro-m.ua/*", "*://rozetka.com.ua/*"]
-      }
-    ]
   },
   webExt: {
     startUrls: [

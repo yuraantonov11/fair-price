@@ -1,25 +1,25 @@
-export interface ProductData {
-  externalId: string;
-  name: string;
-  url: string;
-  price: number;
-  regularPrice: number | null;
-  promoName?: string | null;
-  isAvailable: boolean;
-}
+import { ProductData } from '@/types';
 
 export interface IPriceAdapter {
-  isApplicable(): boolean;
-  injectProvider?(): Promise<void>;
+  readonly storeName: 'rozetka' | 'dnipro-m';
 
-  injectProvider?(): Promise<void> | void;
+  /**
+   * Селектор, після або всередині якого буде інжектований наш графік
+   */
+  readonly injectTargetSelector: string;
 
-  getStoreDomain(): string;
-  isProductPage(): boolean;
-  parseProductPage(): Promise<ProductData | null> | ProductData | null;
-  isCatalogPage(): boolean;
-  parseCatalogPage(): Promise<ProductData[]> | ProductData[];
-  getUIAnchor(): Element | null;
+  /**
+   * Перевіряє, чи відповідає поточний домен цьому адаптеру
+   */
+  matchDomain(hostname: string): boolean;
 
-  getUIInsertMethod(): ContentScriptAppendMode;
+  /**
+   * Перевіряє, чи ми знаходимось на сторінці конкретного товару
+   */
+  isProductPage(url: string): boolean;
+
+  /**
+   * Витягує всі необхідні дані зі сторінки.
+   */
+  extractData(): Promise<ProductData | null>;
 }

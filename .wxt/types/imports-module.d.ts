@@ -18,6 +18,7 @@ declare module '#imports' {
   export { InvalidMatchPattern, MatchPattern } from 'wxt/utils/match-patterns';
   export { useState, useCallback, useMemo, useEffect, useRef, useContext, useReducer } from 'react';
   export { fakeBrowser } from 'wxt/testing';
-  export { HonestyCalculator, HonestyCalculator } from '../src/utils/HonestyCalculator';
-  export { supabase, saveProductsBatch } from '../src/utils/supabase';
+  export { waitForElement, parsePrice, observeSPA } from '../src/utils/domUtils';
+  export { HydrationParser, HydrationParser } from '../src/utils/hydrationParser';
+  export { supabase } from '../src/utils/supabaseClient';
 }

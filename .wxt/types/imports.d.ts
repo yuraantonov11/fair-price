@@ -2,7 +2,7 @@
 export {}
 declare global {
   const ContentScriptContext: typeof import('wxt/utils/content-script-context').ContentScriptContext
-  const HonestyCalculator: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/HonestyCalculator').HonestyCalculator
+  const HydrationParser: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/hydrationParser').HydrationParser
   const InvalidMatchPattern: typeof import('wxt/utils/match-patterns').InvalidMatchPattern
   const MatchPattern: typeof import('wxt/utils/match-patterns').MatchPattern
   const browser: typeof import('wxt/browser').browser
@@ -17,9 +17,10 @@ declare global {
   const fakeBrowser: typeof import('wxt/testing').fakeBrowser
   const getAppConfig: typeof import('wxt/utils/app-config').getAppConfig
   const injectScript: typeof import('wxt/utils/inject-script').injectScript
-  const saveProductsBatch: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/supabase').saveProductsBatch
+  const observeSPA: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/domUtils').observeSPA
+  const parsePrice: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/domUtils').parsePrice
   const storage: typeof import('wxt/utils/storage').storage
-  const supabase: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/supabase').supabase
+  const supabase: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/supabaseClient').supabase
   const useAppConfig: typeof import('wxt/utils/app-config').useAppConfig
   const useCallback: typeof import('react').useCallback
   const useContext: typeof import('react').useContext
@@ -28,6 +29,7 @@ declare global {
   const useReducer: typeof import('react').useReducer
   const useRef: typeof import('react').useRef
   const useState: typeof import('react').useState
+  const waitForElement: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/domUtils').waitForElement
 }
 // for type re-export
 declare global {
@@ -59,6 +61,6 @@ declare global {
   export type { ScriptPublicPath, InjectScriptOptions } from 'wxt/utils/inject-script'
   import('wxt/utils/inject-script')
   // @ts-ignore
-  export type { HonestyCalculator } from 'C:/Users/yuraa/WebstormProjects/fair_price/src/utils/HonestyCalculator'
-  import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/HonestyCalculator')
+  export type { HydrationParser } from 'C:/Users/yuraa/WebstormProjects/fair_price/src/utils/hydrationParser'
+  import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/hydrationParser')
 }
