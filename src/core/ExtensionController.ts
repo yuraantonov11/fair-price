@@ -12,13 +12,13 @@ export class ExtensionController {
     private mountPoint: HTMLElement | null = null;
     private root: any = null;
 
-    constructor(adapter: IPriceAdapter, private renderUI: (container: HTMLElement, history: any[], honestyScore: number) => void) {
+    constructor(adapter: IPriceAdapter, private renderUI: (container: HTMLElement, history: any[], honestyScore: { score: number; message: string }) => void) {
         this.adapter = adapter;
         this.currentUrl = window.location.href;
     }
 
     public init() {
-        console.log(`[FairPrice] Ініціалізація для ${this.adapter.storeName}`);
+        console.log(`[FairPrice] Ініціалізація для ${this.adapter.getStoreDomain()}`);
         this.processPage();
 
         let lastUrl = location.href;
@@ -52,14 +52,14 @@ export class ExtensionController {
     private async processPage() {
         console.log(`[FairPrice] 🚀 Запуск processPage для URL: ${this.currentUrl}`);
 
-        if (!this.adapter.isProductPage(this.currentUrl)) {
+        if (!this.adapter.isProductPage()) {
             console.log('[FairPrice] 🛑 Це не сторінка товару (перевірка isProductPage не пройдена). Перериваємо.');
             return;
         }
 
         try {
             console.log('[FairPrice] ⏳ Спроба витягнути дані про товар...');
-            const productData = await this.adapter.extractData();
+            const productData = await this.adapter.parseProductPage();
 
             if (!productData) {
                 console.warn('[FairPrice] ⚠️ Дані не витягнуто (extractData повернув null). Можливо, змінилася верстка сайту або селектори неактуальні.');
@@ -89,7 +89,7 @@ export class ExtensionController {
                 date: new Date(item.created_at).getTime()
             }));
 
-            const honestyResult = HonestyCalculator.calculate(productData.currentPrice, mappedHistory);
+            const honestyResult = HonestyCalculator.calculate(productData.price / 100, mappedHistory);
             console.log(`[FairPrice] Результат аналізу:`, honestyResult);
 
             await this.injectUI(mappedHistory, honestyResult);
@@ -99,8 +99,13 @@ export class ExtensionController {
         }
     }
 
-    private async injectUI(history: any[], honestyScore: number) {
-        const targetContainer = await waitForElement(this.adapter.injectTargetSelector);
+    private async injectUI(history: any[], honestyScore: { score: number; message: string }) {
+        const anchor = this.adapter.getUIAnchor();
+        if (!anchor) {
+            console.warn('[FairPrice] ⚠️ UI anchor element not found.');
+            return;
+        }
+        const targetContainer = anchor as HTMLElement;
 
         if (!this.mountPoint) {
             this.mountPoint = document.createElement('div');

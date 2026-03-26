@@ -7,7 +7,10 @@ export interface SaveProductMessage {
 
 export interface GetHistoryMessage {
     type: 'GET_HISTORY';
-    payload: { url: string };
+    payload: {
+        url: string;
+        sku?: string; // Можна шукати і за SKU, якщо захочемо в майбутньому
+    };
 }
 
 export type ExtensionMessage = SaveProductMessage | GetHistoryMessage;

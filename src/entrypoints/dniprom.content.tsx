@@ -12,7 +12,7 @@ export default defineContentScript({
     const adapter = new DniproMAdapter();
 
     // Замість ручного createRoot, просто викликаємо нашу функцію з injector.tsx
-    const renderReactUI = (container: HTMLElement, history: any[], honestyScore: number) => {
+    const renderReactUI = (container: HTMLElement, history: any[], honestyScore: { score: number; message: string }) => {
       injectUI(container, history, honestyScore);
     };
 

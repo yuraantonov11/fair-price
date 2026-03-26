@@ -11,13 +11,17 @@ export default defineContentScript({
     const adapter = new RozetkaAdapter();
     let root: any = null;
 
-    const renderReactUI = (container: HTMLElement, history: any[], honestyScore: number) => {
+    const renderReactUI = (
+        container: HTMLElement,
+        history: any[],
+        honestyScore: { score: number; message: string }
+    ) => {
       if (!root) {
         root = createRoot(container);
       }
       root.render(
           <div className="fair-price-app">
-            <PriceChart data={history} />
+            <PriceChart data={history} honesty={honestyScore} />
           </div>
       );
     };

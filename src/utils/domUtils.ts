@@ -33,8 +33,9 @@ export function waitForElement(selector: string, timeout = 5000): Promise<Elemen
  */
 export function parsePrice(priceStr: string | null | undefined): number | null {
     if (!priceStr) return null;
-    // Видаляємо валюту, пробіли (в т.ч. нерозривні), коми міняємо на крапки
+
     const clean = priceStr.replace(/[^\d.,]/g, '').replace(',', '.');
+
     const parsed = parseFloat(clean);
     return isNaN(parsed) ? null : parsed;
 }
