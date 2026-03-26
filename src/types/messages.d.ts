@@ -12,5 +12,11 @@ export interface GetHistoryMessage {
         sku?: string; // Можна шукати і за SKU, якщо захочемо в майбутньому
     };
 }
+export interface SetIconMessage {
+    type: 'SET_ICON';
+    payload: {
+        status: 'success' | 'error' | 'inactive';
+    };
+}
 
-export type ExtensionMessage = SaveProductMessage | GetHistoryMessage;
+export type ExtensionMessage = SaveProductMessage | GetHistoryMessage | SetIconMessage;

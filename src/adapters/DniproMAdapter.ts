@@ -1,95 +1,68 @@
 import { IPriceAdapter, ProductData } from './IPriceAdapter';
 import { parsePrice, waitForElement } from '@/utils/domUtils';
+import { HydrationParser } from '@/utils/hydrationParser';
 
 export class DniproMAdapter implements IPriceAdapter {
+  getStoreDomain(): string { return 'dnipro-m.ua'; }
+  isApplicable(): boolean { return window.location.hostname.includes('dnipro-m.ua'); }
+  isProductPage(): boolean { return window.location.pathname.includes('/tovar/'); }
+  isCatalogPage(): boolean { return !this.isProductPage() && document.querySelector('.catalog-list') !== null; }
+  getUIAnchor(): Element | null { return document.querySelector('h1'); }
+  getUIInsertMethod(): ContentScriptAppendMode { return 'after'; }
 
-  getStoreDomain(): string {
-    return 'dnipro-m.ua';
+  getHydrationData(): any | null {
+    const nextData = HydrationParser.parseNextData();
+    return HydrationParser.getDniproMProduct(nextData);
   }
 
-  isApplicable(): boolean {
-    return window.location.hostname.includes('dnipro-m.ua');
+  getProductID(): string | null {
+    const hyd = this.getHydrationData();
+    if (hyd?.externalId) return hyd.externalId;
+    return document.querySelector('meta[itemprop="sku"]')?.getAttribute('content') ||
+        document.querySelector('.product-code__code')?.textContent?.trim() || null;
   }
 
-  isProductPage(): boolean {
-    return window.location.pathname.includes('/tovar/');
+  getCurrentPrice(): number | null {
+    const hyd = this.getHydrationData();
+    if (hyd?.currentPrice) return parseFloat(hyd.currentPrice);
+    const priceEl = document.querySelector('.product-price__current, .price__current');
+    return parsePrice(priceEl?.textContent);
   }
 
-  isCatalogPage(): boolean {
-    // Adjust this selector/path check to match Dnipro-M catalog URLs if needed
-    return !this.isProductPage() && document.querySelector('.catalog-list, .products-list') !== null;
+  getOriginalPrice(): number | null {
+    const hyd = this.getHydrationData();
+    if (hyd?.oldPrice) return parseFloat(hyd.oldPrice);
+    const oldPriceEl = document.querySelector('.product-price__old, .price__old');
+    return parsePrice(oldPriceEl?.textContent);
   }
 
-  getUIAnchor(): Element | null {
-    return document.querySelector('h1');
-  }
-
-  getUIInsertMethod(): ContentScriptAppendMode {
-    return 'after';
+  getStockStatus(): boolean {
+    const hyd = this.getHydrationData();
+    return hyd?.isAvailable !== undefined ? hyd.isAvailable : true;
   }
 
   async parseProductPage(): Promise<ProductData | null> {
     try {
       await waitForElement('h1', 8000);
-      const title = document.querySelector('h1')?.textContent?.trim() || 'Товар Dnipro-M';
+      const currentPrice = this.getCurrentPrice();
 
-      // SKU
-      const sku = document.querySelector('meta[itemprop="sku"]')?.getAttribute('content') ||
-        document.querySelector('.product-code__code')?.textContent?.trim() ||
-        'unknown';
-
-      // Promo badge
-      const promoName = document.querySelector('.badge__text, .product-card-info__price-badge')?.textContent?.trim() || null;
-
-      // Prices
-      const currentPriceEl = document.querySelector('.product-price__current, .product-card-info__price-current, .price__current');
-      const oldPriceEl = document.querySelector('.product-price__old, .product-card-info__price-old, .price__old');
-
-      let currentPrice = parsePrice(currentPriceEl?.textContent);
-      let oldPrice = parsePrice(oldPriceEl?.textContent);
-
-      // Fallback: JSON-LD
-      if (!currentPrice) {
-        const ldScript = document.querySelector('script[type="application/ld+json"]');
-        if (ldScript) {
-          try {
-            const json = JSON.parse(ldScript.textContent || '{}');
-            const price = json.offers?.price || json.offers?.[0]?.price;
-            if (price) currentPrice = parseFloat(price);
-          } catch (e) { /* ignore */ }
-        }
-      }
-
-      // Guard: suspiciously low price
-      if (currentPrice && currentPrice < 300) {
-        console.warn('[FairPrice] Ціна підозріло мала, ігноруємо:', currentPrice);
-        currentPrice = null;
-      }
-
-      if (!currentPrice) {
-        console.error('[FairPrice] ❌ Не вдалося знайти валідну ціну на сторінці.');
-        return null;
-      }
-
-      console.log(`[FairPrice] ✅ Знайдено: ${currentPrice} UAH (SKU: ${sku})`);
+      if (!currentPrice || currentPrice < 300) return null;
 
       return {
-        externalId: sku,
-        name: title,
+        externalId: this.getProductID() || 'unknown',
+        name: document.querySelector('h1')?.textContent?.trim() || 'Товар Dnipro-M',
         url: window.location.origin + window.location.pathname,
         price: Math.round(currentPrice * 100),
-        regularPrice: oldPrice ? Math.round(oldPrice * 100) : null,
-        promoName: promoName || null,
-        isAvailable: true,
+        regularPrice: this.getOriginalPrice() ? Math.round(this.getOriginalPrice()! * 100) : null,
+        promoName: document.querySelector('.badge__text')?.textContent?.trim() || null,
+        isAvailable: this.getStockStatus(),
+        hydrationData: this.getHydrationData()
       };
     } catch (error) {
-      console.error('[FairPrice] Помилка parseProductPage:', error);
+      console.error('[FairPrice] Помилка:', error);
       return null;
     }
   }
 
-  async parseCatalogPage(): Promise<ProductData[]> {
-    // Implement catalog scraping for Dnipro-M if needed
-    return [];
-  }
+  async parseCatalogPage(): Promise<ProductData[]> { return []; }
 }

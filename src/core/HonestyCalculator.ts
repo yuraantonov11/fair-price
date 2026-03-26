@@ -1,7 +1,4 @@
 export class HonestyCalculator {
-    /**
-     * Розрахунок медіани - вона ігнорує поодинокі "викиди" ціни вгору
-     */
     static calculateMedian(prices: number[]): number {
         if (prices.length === 0) return 0;
         const sorted = [...prices].sort((a, b) => a - b);
@@ -9,42 +6,60 @@ export class HonestyCalculator {
         return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
     }
 
-    /**
-     * Основний метод розрахунку рейтингу чесності
-     */
-    static calculate(currentPrice: number, priceHistory: {price: number, date: number}[]): {score: number, message: string} {
-        // Якщо даних занадто мало (менше 3-5 записів), ми не можемо робити висновки
+    static calculate(
+        currentPrice: number,
+        priceHistory: {price: number, date: number}[],
+        categoryVolatility: number = 0.08
+    ): {score: number, message: string} {
+
         if (priceHistory.length < 3) {
             return { score: -1, message: "Збираємо історію цін для аналізу..." };
         }
 
-        const prices = priceHistory.map(p => p.price);
-        const min30 = Math.min(...prices);
-        const median = this.calculateMedian(prices);
+        const now = Date.now();
+        const sixtyDaysAgo = now - (60 * 24 * 60 * 60 * 1000);
+        const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+        const fourteenDaysAgo = now - (14 * 24 * 60 * 60 * 1000);
 
-        // --- Детекція Pre-inflation Spike (Штраф за маніпуляцію) ---
+        // Вся історія за 60 днів
+        const history60Days = priceHistory.filter(p => p.date >= sixtyDaysAgo);
+        const prices60 = history60Days.map(p => p.price);
+        const median = this.calculateMedian(prices60);
+
+        // Мінімум за 30 днів
+        const history30Days = priceHistory.filter(p => p.date >= thirtyDaysAgo);
+        const min30 = history30Days.length > 0 ? Math.min(...history30Days.map(p => p.price)) : currentPrice;
+
+        // ==========================================
+        // 🚨 ВИПРАВЛЕНА ЛОГІКА ДЕТЕКЦІЇ СТРИБКА
+        // ==========================================
         let penaltySpike = 0;
-        const fourteenDaysAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
 
-        // Шукаємо, чи була ціна значно нижчою за останні 14 днів
+        // Максимальна ціна за останні 14 днів (шукаємо сам "стрибок")
         const recentPrices = priceHistory.filter(p => p.date >= fourteenDaysAgo);
-        if (recentPrices.length > 1) {
-            const oldRecentPrice = recentPrices[0].price;
-            // Якщо ціна перед "знижкою" зросла на понад 15-20%
-            if (currentPrice < oldRecentPrice * 1.2 && prices.some(p => p > currentPrice * 1.1)) {
-                // Це виглядає як штучне накручування
-                penaltySpike = 40;
-            }
-        }
+        const maxRecentPrice = recentPrices.length > 0 ? Math.max(...recentPrices.map(p => p.price)) : currentPrice;
 
-        // Формула з ТЗ: Score = max(0, (1 - (P_now - P_min30)/P_median) * 100 - Penalty)
+        // Медіана ціни ДО цих 14 днів (шукаємо "нормальну" ціну)
+        const olderPrices = priceHistory.filter(p => p.date < fourteenDaysAgo && p.date >= sixtyDaysAgo);
+        const oldMedian = olderPrices.length > 0 ? this.calculateMedian(olderPrices.map(p => p.price)) : median;
+
+        // Якщо за останні 2 тижні ціна підстрибнула на >20% від старої норми,
+        // і зараз нам подають це як знижку:
+        if (maxRecentPrice > oldMedian * 1.2 && currentPrice < maxRecentPrice) {
+            penaltySpike = 50; // Нараховуємо 50 штрафних балів
+        }
+        // ==========================================
+
         let score = (1 - ((currentPrice - min30) / (median || 1))) * 100;
         score = Math.max(0, score - penaltySpike);
 
-        // Формування повідомлення
         let message = "Ціна виглядає стабільною.";
+        const discountRatio = (median - currentPrice) / (median || 1);
+
         if (penaltySpike > 0) {
             message = "Увага! Помічено штучне підняття ціни перед знижкою (Pre-inflation Spike).";
+        } else if (discountRatio > categoryVolatility * 3) {
+            message = "Аномально висока знижка для цієї категорії. Можлива маніпуляція якістю.";
         } else if (score < 40) {
             message = "Знижка сумнівна. Ціна нещодавно була нижчою.";
         } else if (score > 80) {

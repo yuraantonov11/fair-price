@@ -1,213 +1,169 @@
-import React from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import React, { useState } from 'react';
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid, ReferenceLine
+} from 'recharts';
 
 type PriceHistory = {
   price: number;
   oldPrice?: number | null;
   promoName?: string | null;
-  date: string | number; // Дозволяємо і рядок (ISO), і число (Timestamp)
+  date: string | number;
 };
 
 interface PriceChartProps {
   data: PriceHistory[];
-  honesty: {
-    score: number;
-    message: string;
-  };
+  honesty: { score: number; message: string; };
 }
 
+// Хелпери
+function scoreColor(score: number) {
+  if (score < 40) return { text: 'text-rose-500', stroke: '#f43f5e', bg: 'bg-rose-500/10', border: 'border-rose-500/20' };
+  if (score < 70) return { text: 'text-amber-500', stroke: '#f59e0b', bg: 'bg-amber-500/10', border: 'border-amber-500/20' };
+  return { text: 'text-emerald-500', stroke: '#10b981', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
+}
+
+function formatPrice(v: number) { return v.toLocaleString('uk-UA') + ' ₴'; }
+
+// Круговий індикатор чесності
+const ScoreRing = ({ score }: { score: number }) => {
+  const colors = scoreColor(score);
+  const r = 28;
+  const circ = 2 * Math.PI * r;
+  const filled = (score / 100) * circ;
+  const label = score < 40 ? 'Підозрілий' : score < 70 ? 'Сумнівний' : 'Чесний';
+  const emoji  = score < 40 ? '🚨' : score < 70 ? '⚠️' : '✅';
+
+  return (
+      <div className="flex items-center gap-3">
+        <div className="relative w-[72px] h-[72px] shrink-0">
+          <svg width="72" height="72" viewBox="0 0 72 72" className="-rotate-90">
+            <circle cx="36" cy="36" r={r} fill="none" className="stroke-white/5" strokeWidth="6" />
+            <circle
+                cx="36" cy="36" r={r} fill="none"
+                stroke={colors.stroke} strokeWidth="6" strokeLinecap="round"
+                strokeDasharray={`${filled} ${circ}`}
+                className="transition-all duration-700 ease-out"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className={`text-base font-black ${colors.text}`}>{score}%</span>
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Аналіз чесності</span>
+            <span className="text-xs">{emoji}</span>
+          </div>
+          <span className={`text-sm font-extrabold ${colors.text}`}>{label}</span>
+        </div>
+      </div>
+  );
+};
+
+const CollectingCard = ({ count, message }: { count: number; message: string }) => (
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-5 flex flex-col gap-4 shadow-xl font-sans">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">
+          Починаємо моніторинг
+        </span>
+        </div>
+        <span className="text-xs text-emerald-400 font-black px-2 py-1 bg-emerald-400/10 rounded-md">
+        {count} / 3 записи
+      </span>
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+          <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700 ease-out"
+              style={{ width: `${Math.min((count / 3) * 100, 100)}%` }}
+          />
+        </div>
+        <p className="text-sm text-slate-300 leading-relaxed mt-1">
+          Першу ціну зафіксовано! 🕵️‍♂️ Щоб показати точний графік та перевірити чесність знижки, нам потрібно зібрати трохи більше історії.
+        </p>
+        <p className="text-xs text-slate-500 mt-1">
+          Завітайте сюди пізніше — розширення автоматично стежить за змінами.
+        </p>
+      </div>
+    </div>
+);
+
+// Головний компонент
 export const PriceChart = ({ data, honesty }: PriceChartProps) => {
   if (!data || data.length === 0) {
-    return (
-        <div className="flex flex-col gap-2 p-4 bg-slate-800 rounded-xl text-white">
-          <p className="text-sm text-slate-400 text-center">
-            Недостатньо даних для побудови графіка.
-          </p>
-        </div>
-    );
+    return <div className="p-4 rounded-2xl bg-slate-900/90 text-slate-400 text-xs text-center">Недостатньо даних.</div>;
   }
 
-  // Перетворюємо всі дати в мілісекунди для надійного сортування
-  const normalizedData = data.map(item => ({
-    ...item,
-    timestamp: new Date(item.date).getTime()
-  })).sort((a, b) => a.timestamp - b.timestamp);
+  const normalizedData = data
+      .map(item => ({ ...item, timestamp: new Date(item.date).getTime() }))
+      .sort((a, b) => a.timestamp - b.timestamp);
 
-  const isCollecting = honesty.score === -1;
-
-  // Режим збору даних (коли записів < 3)
-  if (isCollecting && normalizedData.length < 3) {
-    const currentPrice = normalizedData[normalizedData.length - 1]?.price;
-    return (
-        <div className="flex flex-col gap-3 p-4 bg-slate-800 rounded-xl text-white">
-          <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">
-              Чесна Ціна — Моніторинг
-            </span>
-            <span className="text-[10px] text-slate-500">
-              {normalizedData.length} / 3+ записів
-            </span>
-          </div>
-
-          {currentPrice && (
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-emerald-400">
-                  {currentPrice.toLocaleString('uk-UA')} ₴
-                </span>
-                <span className="text-xs text-slate-400">поточна ціна</span>
-              </div>
-          )}
-
-          <div className="flex flex-col gap-1">
-            <div className="w-full bg-slate-700 rounded-full h-1.5">
-              <div
-                  className="bg-amber-400 h-1.5 rounded-full transition-all"
-                  style={{ width: `${Math.min((normalizedData.length / 3) * 100, 100)}%` }}
-              />
-            </div>
-            <p className="text-[11px] text-slate-400 leading-relaxed">
-              {honesty.message}
-            </p>
-          </div>
-        </div>
-    );
+  if (honesty.score === -1 && normalizedData.length < 3) {
+    return <CollectingCard count={normalizedData.length} message={honesty.message} />;
   }
 
-  // Визначаємо колірну схему на основі скорингу
-  const getScoreColor = (score: number) => {
-    if (score < 40) return 'text-rose-500';
-    if (score < 70) return 'text-amber-500';
-    return 'text-emerald-500';
-  };
-
-  const getScoreBg = (score: number) => {
-    if (score < 40) return 'bg-rose-500/10 border-rose-500/20';
-    if (score < 70) return 'bg-amber-500/10 border-amber-500/20';
-    return 'bg-emerald-500/10 border-emerald-500/20';
-  };
-
-  // Групування даних по днях для графіка
+  // Підготовка даних для графіка (групування по днях)
   const groupedByDay = normalizedData.reduce((acc, item) => {
     const dateObj = new Date(item.date);
-
     if (isNaN(dateObj.getTime())) return acc;
-
     const dateStr = dateObj.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' });
-
     acc[dateStr] = {
       dateStr,
-      fullDate: dateObj.toLocaleDateString('uk-UA', { day: '2-digit', month: 'long', year: 'numeric' }),
       price: Math.round(item.price),
       oldPrice: item.oldPrice ? Math.round(item.oldPrice) : null,
-      promoName: item.promoName,
-      timestamp: item.timestamp
+      timestamp: item.timestamp,
     };
     return acc;
   }, {} as Record<string, any>);
 
-  let chartData = Object.values(groupedByDay)
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .slice(-14);
-
-  // Якщо точка лише одна, додаємо "фіктивну" початкову точку для лінії
-  if (chartData.length === 1) {
-    const today = chartData[0];
-    chartData = [{ ...today, dateStr: 'Початок', fullDate: 'Старт моніторингу' }, today];
-  }
-
-  const prices = chartData.flatMap(d => d.oldPrice ? [d.price, d.oldPrice] : [d.price]);
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
-  const padding = (maxPrice - minPrice) * 0.2 || 100;
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const item = payload[0].payload;
-      return (
-          <div className="p-3 bg-slate-900/95 border border-slate-700 rounded-lg text-white shadow-xl z-50">
-            <p className="text-[10px] text-slate-400 font-bold uppercase mb-2">{item.fullDate}</p>
-            {item.promoName && (
-                <div className="mb-2">
-                  <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-400 border border-amber-400/30">
-                    {item.promoName}
-                  </span>
-                </div>
-            )}
-            <div className="flex flex-col gap-0.5">
-              <p className="text-sm font-black text-emerald-400">{item.price} ₴</p>
-              {item.oldPrice && item.oldPrice > item.price && (
-                  <p className="text-xs text-slate-400 line-through decoration-rose-500/70">{item.oldPrice} ₴</p>
-              )}
-            </div>
-          </div>
-      );
-    }
-    return null;
-  };
+  const chartData = Object.values(groupedByDay).sort((a: any, b: any) => a.timestamp - b.timestamp).slice(-14);
+  const colors = scoreColor(honesty.score);
 
   return (
-      <div className="flex flex-col w-full gap-4 p-4 bg-slate-800 rounded-xl">
-        {/* Блок рейтингу */}
-        <div className={`p-3 rounded-lg border ${getScoreBg(honesty.score)} flex flex-col gap-1`}>
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
-              Аналіз чесності
-            </span>
-            <span className={`text-xl font-black ${getScoreColor(honesty.score)}`}>
-              {honesty.score === -1 ? '...' : `${honesty.score}%`}
-            </span>
+      <div className="flex flex-col gap-3 bg-gradient-to-br from-slate-900/95 to-slate-800/95 rounded-2xl border border-white/5 p-4 shadow-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">FairPrice</span>
+            <span className="text-xs text-slate-400 font-medium">Історія цін · {chartData.length} записів</span>
           </div>
-          <p className="text-[11px] font-medium text-slate-300 leading-relaxed">
-            {honesty.message}
-          </p>
         </div>
 
-        {/* Графік — додаємо inline-style для Shadow DOM */}
-        <div style={{ width: '100%', height: '180px', position: 'relative' }}>
+        <div className={`p-2.5 rounded-xl ${colors.bg} ${colors.border} border text-xs text-slate-300 font-medium leading-relaxed`}>
+          {honesty.message}
+        </div>
+
+        {/* Графік Recharts */}
+        <div className="w-full h-[180px] mt-2">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-              <XAxis
-                  dataKey="dateStr"
-                  stroke="#94a3b8"
-                  fontSize={10}
-                  tickLine={false}
-                  axisLine={false}
-                  tickMargin={10}
-              />
-              {/* Додаємо перевірку, щоб не було NaN */}
-              <YAxis domain={[Math.max(0, (minPrice || 0) - (padding || 0)), (maxPrice || 0) + (padding || 0)]} hide />
-              <Tooltip content={<CustomTooltip />} />
-              <Line
-                  type="monotone"
-                  dataKey="oldPrice"
-                  stroke="#64748b"
-                  strokeWidth={2}
-                  strokeDasharray="4 4"
-                  dot={false}
-                  connectNulls={true}
-              />
-              <Line
-                  type="monotone"
-                  dataKey="price"
-                  stroke="#34d399"
-                  strokeWidth={3}
-                  dot={{ r: 4, fill: '#34d399', strokeWidth: 2, stroke: '#1e293b' }}
-                  connectNulls={true}
-              />
-            </LineChart>
+            <AreaChart data={chartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradPrice" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="dateStr" stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
+              <YAxis stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} width={40} />
+              <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }} itemStyle={{ color: '#10b981' }} />
+              <Area type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2.5} fill="url(#gradPrice)" />
+            </AreaChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="flex justify-center gap-4 border-t border-slate-700 pt-3">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Ціна зі знижкою</span>
+        {/* Легенда та оцінка */}
+        <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-1 rounded-full bg-emerald-500" />
+              <span className="text-[10px] text-slate-400 font-medium">Ціна зі знижкою</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full border border-slate-400 border-dashed"></span>
-            <span className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Без знижки</span>
-          </div>
+          {honesty.score !== -1 && <ScoreRing score={honesty.score} />}
         </div>
       </div>
   );

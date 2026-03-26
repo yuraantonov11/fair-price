@@ -1,13 +1,4 @@
-export interface ProductData {
-    url: string;
-    title: string;
-    sku: string;            // Унікальний ID товару з сайту (для p_external_id)
-    currentPrice: number;   // Ціна (у копійках для БД, у гривнях для UI)
-    oldPrice: number | null;// Стара ціна
-    promoName: string | null; // Назва акції
-    store: 'rozetka' | 'dnipro-m';
-    storeDomain: string;    // Чистий домен (наприклад, 'rozetka.com.ua')
-}
+export { ProductData } from '../adapters/IPriceAdapter';
 
 export interface HistoryRecord {
     price: number;
