@@ -37,6 +37,9 @@ The content is organized as follows:
 ```
 .gitignore
 package.json
+public/icons/icon_error.png
+public/icons/icon_inactive.png
+public/icons/icon_success.png
 README.md
 src/adapters/DniproMAdapter.ts
 src/adapters/IPriceAdapter.ts
@@ -130,130 +133,9 @@ wxt.config.ts
 MIT
 ````
 
-## File: src/core/ExtensionController.ts
-````typescript
-import { IPriceAdapter } from '@/adapters/IPriceAdapter';
-import { ProductData } from '@/types';
-import { waitForElement } from '@/utils/domUtils';
-import { HonestyCalculator } from './HonestyCalculator';
-import {MessageRouter} from "@/core/MessageRouter";
-
-console.error('[FairPrice: BOOT] 🟧 3. Модуль ExtensionController завантажено в пам\'ять!');
-
-export class ExtensionController {
-    private adapter: IPriceAdapter;
-    private currentUrl: string;
-    private mountPoint: HTMLElement | null = null;
-    private root: any = null;
-
-    constructor(adapter: IPriceAdapter, private renderUI: (container: HTMLElement, history: any[], honestyScore: { score: number; message: string }) => void) {
-        this.adapter = adapter;
-        this.currentUrl = window.location.href;
-    }
-
-    public init() {
-        console.log(`[FairPrice] Ініціалізація для ${this.adapter.storeName}`);
-        this.processPage();
-
-        let lastUrl = location.href;
-        new MutationObserver(() => {
-            const url = location.href;
-            if (url !== lastUrl) {
-                lastUrl = url;
-                this.onUrlChange();
-            }
-        }).observe(document, {subtree: true, childList: true});
-    }
-
-    private onUrlChange() {
-        console.log('[FairPrice] Виявлено SPA навігацію. Перезапуск...');
-        this.currentUrl = location.href; // Оновлюємо URL
-        this.cleanup();
-        setTimeout(() => this.processPage(), 500);
-    }
-
-    private cleanup() {
-        if (this.root) {
-            this.root.unmount();
-            this.root = null;
-        }
-        if (this.mountPoint) {
-            this.mountPoint.remove();
-            this.mountPoint = null;
-        }
-    }
-
-    private async processPage() {
-        console.log(`[FairPrice] 🚀 Запуск processPage для URL: ${this.currentUrl}`);
-
-        if (!this.adapter.isProductPage(this.currentUrl)) {
-            console.log('[FairPrice] 🛑 Це не сторінка товару (перевірка isProductPage не пройдена). Перериваємо.');
-            return;
-        }
-
-        try {
-            console.log('[FairPrice] ⏳ Спроба витягнути дані про товар...');
-            const productData = await this.adapter.extractData();
-
-            if (!productData) {
-                console.warn('[FairPrice] ⚠️ Дані не витягнуто (extractData повернув null). Можливо, змінилася верстка сайту або селектори неактуальні.');
-                return;
-            }
-            console.log('[FairPrice] ✅ Дані успішно отримані:', productData);
-
-            console.log('[FairPrice] 💾 Відправляємо дані в background для збереження...');
-            await MessageRouter.send({
-                type: 'SAVE_PRODUCT',
-                payload: productData
-            });
-
-            console.log('[FairPrice] 📥 Запитуємо історію цін з БД...');
-            const historyResponse = await MessageRouter.send({
-                type: 'GET_HISTORY',
-                payload: { url: productData.url }
-            });
-
-            if (!historyResponse.success) {
-                throw new Error('Failed to fetch history');
-            }
-            console.log(`[FairPrice] 📊 Отримано історію (${historyResponse.data.length} записів):`, historyResponse.data);
-
-            const mappedHistory = historyResponse.data.map((item: any) => ({
-                price: item.price,
-                date: new Date(item.created_at).getTime()
-            }));
-
-            const honestyResult = HonestyCalculator.calculate(productData.currentPrice, mappedHistory);
-            console.log(`[FairPrice] Результат аналізу:`, honestyResult);
-
-            await this.injectUI(mappedHistory, honestyResult);
-
-        } catch (error) {
-            console.error('[FairPrice] ❌ Помилка обробки сторінки:', error);
-        }
-    }
-
-    private async injectUI(history: any[], honestyScore: { score: number; message: string }) {
-        const targetContainer = await waitForElement(this.adapter.injectTargetSelector);
-
-        if (!this.mountPoint) {
-            this.mountPoint = document.createElement('div');
-            this.mountPoint.id = 'fair-price-container';
-            this.mountPoint.className = 'tw-mt-4 tw-p-4 tw-border tw-rounded tw-bg-white';
-            targetContainer.appendChild(this.mountPoint);
-        }
-
-        this.renderUI(this.mountPoint, history, honestyScore);
-    }
-}
-````
-
 ## File: src/core/HonestyCalculator.ts
 ````typescript
 export class HonestyCalculator {
-    /**
-     * Розрахунок медіани - вона ігнорує поодинокі "викиди" ціни вгору
-     */
     static calculateMedian(prices: number[]): number {
         if (prices.length === 0) return 0;
         const sorted = [...prices].sort((a, b) => a - b);
@@ -261,42 +143,60 @@ export class HonestyCalculator {
         return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
     }
 
-    /**
-     * Основний метод розрахунку рейтингу чесності
-     */
-    static calculate(currentPrice: number, priceHistory: {price: number, date: number}[]): {score: number, message: string} {
-        // Якщо даних занадто мало (менше 3-5 записів), ми не можемо робити висновки
+    static calculate(
+        currentPrice: number,
+        priceHistory: {price: number, date: number}[],
+        categoryVolatility: number = 0.08
+    ): {score: number, message: string} {
+
         if (priceHistory.length < 3) {
             return { score: -1, message: "Збираємо історію цін для аналізу..." };
         }
 
-        const prices = priceHistory.map(p => p.price);
-        const min30 = Math.min(...prices);
-        const median = this.calculateMedian(prices);
+        const now = Date.now();
+        const sixtyDaysAgo = now - (60 * 24 * 60 * 60 * 1000);
+        const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+        const fourteenDaysAgo = now - (14 * 24 * 60 * 60 * 1000);
 
-        // --- Детекція Pre-inflation Spike (Штраф за маніпуляцію) ---
+        // Вся історія за 60 днів
+        const history60Days = priceHistory.filter(p => p.date >= sixtyDaysAgo);
+        const prices60 = history60Days.map(p => p.price);
+        const median = this.calculateMedian(prices60);
+
+        // Мінімум за 30 днів
+        const history30Days = priceHistory.filter(p => p.date >= thirtyDaysAgo);
+        const min30 = history30Days.length > 0 ? Math.min(...history30Days.map(p => p.price)) : currentPrice;
+
+        // ==========================================
+        // 🚨 ВИПРАВЛЕНА ЛОГІКА ДЕТЕКЦІЇ СТРИБКА
+        // ==========================================
         let penaltySpike = 0;
-        const fourteenDaysAgo = Date.now() - (14 * 24 * 60 * 60 * 1000);
 
-        // Шукаємо, чи була ціна значно нижчою за останні 14 днів
+        // Максимальна ціна за останні 14 днів (шукаємо сам "стрибок")
         const recentPrices = priceHistory.filter(p => p.date >= fourteenDaysAgo);
-        if (recentPrices.length > 1) {
-            const oldRecentPrice = recentPrices[0].price;
-            // Якщо ціна перед "знижкою" зросла на понад 15-20%
-            if (currentPrice < oldRecentPrice * 1.2 && prices.some(p => p > currentPrice * 1.1)) {
-                // Це виглядає як штучне накручування
-                penaltySpike = 40;
-            }
-        }
+        const maxRecentPrice = recentPrices.length > 0 ? Math.max(...recentPrices.map(p => p.price)) : currentPrice;
 
-        // Формула з ТЗ: Score = max(0, (1 - (P_now - P_min30)/P_median) * 100 - Penalty)
+        // Медіана ціни ДО цих 14 днів (шукаємо "нормальну" ціну)
+        const olderPrices = priceHistory.filter(p => p.date < fourteenDaysAgo && p.date >= sixtyDaysAgo);
+        const oldMedian = olderPrices.length > 0 ? this.calculateMedian(olderPrices.map(p => p.price)) : median;
+
+        // Якщо за останні 2 тижні ціна підстрибнула на >20% від старої норми,
+        // і зараз нам подають це як знижку:
+        if (maxRecentPrice > oldMedian * 1.2 && currentPrice < maxRecentPrice) {
+            penaltySpike = 50; // Нараховуємо 50 штрафних балів
+        }
+        // ==========================================
+
         let score = (1 - ((currentPrice - min30) / (median || 1))) * 100;
         score = Math.max(0, score - penaltySpike);
 
-        // Формування повідомлення
         let message = "Ціна виглядає стабільною.";
+        const discountRatio = (median - currentPrice) / (median || 1);
+
         if (penaltySpike > 0) {
             message = "Увага! Помічено штучне підняття ціни перед знижкою (Pre-inflation Spike).";
+        } else if (discountRatio > categoryVolatility * 3) {
+            message = "Аномально висока знижка для цієї категорії. Можлива маніпуляція якістю.";
         } else if (score < 40) {
             message = "Знижка сумнівна. Ціна нещодавно була нижчою.";
         } else if (score > 80) {
@@ -324,41 +224,69 @@ export class MessageRouter {
 }
 ````
 
-## File: src/entrypoints/dniprom.content.tsx
-````typescript
-console.error('[FairPrice: BOOT] ⬛ 1. Файл dniprom.content.tsx фізично прочитано браузером!');
-import { DniproMAdapter } from '@/adapters/DniproMAdapter';
-import { ExtensionController } from '@/core/ExtensionController';
-import { injectUI } from '@/ui/injector';
-
-export default defineContentScript({
-  matches: ['*://dnipro-m.ua/*', '*://*.dnipro-m.ua/*'],
-
-  main() {
-    console.log('[FairPrice: LEVEL 0] 🚀 Скрипт завантажено для Dnipro-M');
-
-    const adapter = new DniproMAdapter();
-
-    // Замість ручного createRoot, просто викликаємо нашу функцію з injector.tsx
-    const renderReactUI = (container: HTMLElement, history: any[], honestyScore: { score: number; message: string }) => {
-      injectUI(container, history, honestyScore);
-    };
-
-    const controller = new ExtensionController(adapter, renderReactUI);
-    controller.init();
-  },
-});
-````
-
 ## File: src/entrypoints/popup/App.tsx
 ````typescript
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 
 const App: React.FC = () => {
+    const [currentUrl, setCurrentUrl] = useState<string>('');
+    const [isSupported, setIsSupported] = useState<boolean>(false);
+
+    useEffect(() => {
+        // Отримуємо URL поточної активної вкладки
+        if (typeof browser !== 'undefined' && browser.tabs) {
+            browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
+                const url = tabs[0]?.url || '';
+                setCurrentUrl(url);
+                setIsSupported(url.includes('rozetka.com.ua') || url.includes('dnipro-m.ua'));
+            });
+        }
+    }, []);
+
     return (
-        <div className="fair-price-popup p-4">
-            <h1 className="text-xl font-bold">Чесна Ціна</h1>
-            <p className="mt-2 text-gray-600">Перевірка історії цін...</p>
+        <div className="w-80 p-5 bg-slate-900 text-slate-200 font-sans border border-slate-700 shadow-2xl">
+            {/* Шапка */}
+            <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
+                    <span className="text-xl">🕵️‍♂️</span>
+                </div>
+                <div>
+                    <h1 className="text-lg font-black text-white leading-tight">Чесна Ціна</h1>
+                    <p className="text-[10px] uppercase tracking-widest text-emerald-400 font-bold">Fair Price Tracker</p>
+                </div>
+            </div>
+
+            {/* Блок статусу */}
+            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700/50">
+                {isSupported ? (
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-emerald-400">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
+                            <span className="text-sm font-bold">Сайт підтримується</span>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                            Відкрийте сторінку будь-якого товару, і ми автоматично покажемо графік історії цін та перевіримо чесність знижки просто на сторінці.
+                        </p>
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-amber-400">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                            <span className="text-sm font-bold">Сайт не підтримується</span>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed">
+                            Розширення наразі працює на <b>Rozetka</b> та <b>Dnipro-M</b>. Перейдіть на один із цих магазинів для аналізу цін.
+                        </p>
+                    </div>
+                )}
+            </div>
+
+            {/* Футер */}
+            <div className="mt-4 pt-3 border-t border-slate-700/50 text-center">
+                <p className="text-[10px] text-slate-500">
+                    Розроблено для захисту від маніпулятивних знижок.
+                </p>
+            </div>
         </div>
     );
 };
@@ -388,6 +316,284 @@ export default App;
     </script>
 </body>
 </html>
+````
+
+## File: src/store/usePriceStore.ts
+````typescript
+// Placeholder for usePriceStore.ts (Zustand + chrome.storage)
+// export const usePriceStore = create(...)
+
+export const usePriceStore = {
+    // TODO: Implement Zustand store with chrome.storage persistence
+};
+````
+
+## File: src/types/css.d.ts
+````typescript
+declare module '*.css';
+declare module '@/ui/styles.css?inline';
+````
+
+## File: src/types/env.d.ts
+````typescript
+interface ImportMetaEnv {
+    readonly VITE_SUPABASE_URL: string;
+    readonly VITE_SUPABASE_ANON_KEY: string;
+}
+
+interface ImportMeta {
+    readonly env: ImportMetaEnv;
+}
+````
+
+## File: src/ui/styles.css
+````css
+/* Спочатку імпорт шрифтів */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+
+/* Потім Tailwind */
+@import "tailwindcss";
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+.fair-price-app {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color-scheme: dark;
+}
+
+.fair-price-app p {
+  margin: 0;
+}
+````
+
+## File: src/utils/hydrationParser.ts
+````typescript
+export class HydrationParser {
+    static parseNextData(): any {
+        const script = document.getElementById('__NEXT_DATA__');
+        if (script) {
+            try {
+                const data = JSON.parse(script.textContent || '{}');
+                // Шлях до даних у Dnipro-M зазвичай лежить у props.pageProps
+                return data?.props?.pageProps || null;
+            } catch (e) {
+                console.error('[FairPrice] Помилка парсингу __NEXT_DATA__', e);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Специфічний мапінг для Dnipro-M
+     */
+    static getDniproMProduct(data: any) {
+        if (!data || !data.product) return null;
+
+        const p = data.product;
+        return {
+            externalId: String(p.id),
+            title: p.title,
+            currentPrice: p.price, // Тут ціна вже зазвичай у форматі number
+            oldPrice: p.oldPrice || null,
+            isAvailable: p.isAvailable ?? true
+        };
+    }
+}
+````
+
+## File: .gitignore
+````
+.idea/
+*.DS_Store
+node_modules/
+dist/
+build/
+.output/
+````
+
+## File: src/core/ExtensionController.ts
+````typescript
+import { IPriceAdapter } from '@/adapters/IPriceAdapter';
+import { HonestyCalculator } from './HonestyCalculator';
+import { MessageRouter } from "@/core/MessageRouter";
+
+export class ExtensionController {
+    private adapter: IPriceAdapter;
+    private currentUrl: string;
+    private mountPoint: HTMLElement | null = null;
+    private observer: MutationObserver | null = null;
+
+    constructor(
+        adapter: IPriceAdapter,
+        private renderUI: (container: HTMLElement, history: any[], honestyScore: { score: number; message: string }) => void
+    ) {
+        this.adapter = adapter;
+        this.currentUrl = window.location.href;
+    }
+
+    public init() {
+        console.log(`[FairPrice] Ініціалізація для ${this.adapter.getStoreDomain()}`);
+        this.processPage();
+
+        // Надійний обсервер для SPA-додатків
+        this.observer = new MutationObserver(() => {
+            const url = location.href;
+            if (url !== this.currentUrl) {
+                this.currentUrl = url;
+                console.log('[FairPrice] Виявлено SPA навігацію. Перезапуск...');
+                this.cleanup();
+                // Дебаунс для того, щоб React/Next.js встиг відрендерити новий DOM
+                setTimeout(() => this.processPage(), 500);
+            }
+        });
+        this.observer.observe(document, { subtree: true, childList: true });
+    }
+
+    private cleanup() {
+        if (this.mountPoint) {
+            this.mountPoint.remove();
+            this.mountPoint = null;
+        }
+    }
+
+    private async processPage() {
+        if (!this.adapter.isProductPage()) {
+            MessageRouter.send({ type: 'SET_ICON', payload: { status: 'inactive' } }).catch(() => {});
+            return;
+        }
+
+        try {
+            const productData = await this.adapter.parseProductPage();
+            if (!productData) return;
+
+            await MessageRouter.send({ type: 'SAVE_PRODUCT', payload: productData });
+
+            const historyResponse = await MessageRouter.send({
+                type: 'GET_HISTORY',
+                payload: { url: productData.url }
+            });
+
+            if (!historyResponse.success) throw new Error('Failed to fetch history');
+
+            let mappedHistory = historyResponse.data.map((item: any) => ({
+                price: item.price,
+                oldPrice: item.oldPrice,
+                promoName: item.promoName,
+                date: new Date(item.date).getTime()
+            }));
+
+            // ==========================================
+            // 🛠 РЕЖИМ РОЗРОБНИКА (MOCK DATA)
+            // ==========================================
+            const DEV_MODE = true; // Зміни на false перед релізом!
+
+            // Змінюй це значення для тестування різних станів:
+            // 'FAKE'       - Маніпуляція (штучне підняття перед акцією)
+            // 'HONEST'     - Дійсно вигідна і чесна знижка
+            // 'COLLECTING' - Недостатньо даних (менше 3 записів)
+            const SCENARIO: 'FAKE' | 'HONEST' | 'COLLECTING' = 'FAKE';
+
+            if (DEV_MODE) {
+                console.warn(`[FairPrice: DEV MODE] Увімкнено сценарій: ${SCENARIO}`);
+                const now = Date.now();
+                const day = 24 * 60 * 60 * 1000;
+
+                if (SCENARIO === 'FAKE') {
+                    productData.price = 1999 * 100; // Підміняємо поточну ціну
+                    mappedHistory = [
+                        { price: 2500, oldPrice: null, promoName: null, date: now - 60 * day },
+                        { price: 2400, oldPrice: 2800, promoName: 'Весняний розпродаж', date: now - 30 * day },
+                        { price: 3200, oldPrice: null, promoName: null, date: now - 12 * day }, // Стрибок
+                        { price: 1999, oldPrice: 3500, promoName: 'Супер Знижка', date: now }
+                    ];
+                }
+                else if (SCENARIO === 'HONEST') {
+                    productData.price = 1800 * 100;
+                    mappedHistory = [
+                        { price: 2500, oldPrice: null, promoName: null, date: now - 60 * day },
+                        { price: 2500, oldPrice: null, promoName: null, date: now - 45 * day },
+                        { price: 2450, oldPrice: null, promoName: null, date: now - 30 * day },
+                        { price: 2450, oldPrice: null, promoName: null, date: now - 10 * day },
+                        { price: 1800, oldPrice: 2450, promoName: 'Чесний Розпродаж', date: now } // Реальне падіння
+                    ];
+                }
+                else if (SCENARIO === 'COLLECTING') {
+                    productData.price = 2500 * 100;
+                    mappedHistory = [
+                        { price: 2500, oldPrice: null, promoName: null, date: now - 2 * day }
+                    ];
+                }
+            }
+            // ==========================================
+
+            const volatility = this.adapter.getStoreDomain() === 'dnipro-m.ua' ? 0.08 : 0.15;
+
+            // Передаємо поточну ціну (справжню або підмінену тестову)
+            const honestyResult = HonestyCalculator.calculate(
+                productData.price / 100,
+                mappedHistory,
+                volatility
+            );
+
+            const iconStatus = honestyResult.score === -1 ? 'inactive' : (honestyResult.score < 40 ? 'error' : 'success');
+            MessageRouter.send({ type: 'SET_ICON', payload: { status: iconStatus } }).catch(() => {});
+
+            await this.injectUI(mappedHistory, honestyResult);
+
+        } catch (error) {
+            console.error('[FairPrice] ❌ Помилка обробки сторінки:', error);
+        }
+    }
+
+    private async injectUI(history: any[], honestyScore: { score: number; message: string }) {
+        const anchor = this.adapter.getUIAnchor();
+        if (!anchor) return;
+
+        if (!this.mountPoint) {
+            this.mountPoint = document.createElement('div');
+            this.mountPoint.id = 'fair-price-container';
+            this.mountPoint.className = 'w-full mt-4 mb-4 z-50 block'; // Tailwind замість inline-стилів
+
+            const insertMethod = this.adapter.getUIInsertMethod();
+            if (insertMethod === 'after') {
+                anchor.parentNode?.insertBefore(this.mountPoint, anchor.nextSibling);
+            } else {
+                anchor.appendChild(this.mountPoint);
+            }
+        }
+
+        this.renderUI(this.mountPoint, history, honestyScore);
+    }
+}
+````
+
+## File: src/entrypoints/dniprom.content.tsx
+````typescript
+console.error('[FairPrice: BOOT] ⬛ 1. Файл dniprom.content.tsx фізично прочитано браузером!');
+import { DniproMAdapter } from '@/adapters/DniproMAdapter';
+import { ExtensionController } from '@/core/ExtensionController';
+import { injectUI } from '@/ui/injector';
+
+export default defineContentScript({
+  matches: ['*://dnipro-m.ua/*', '*://*.dnipro-m.ua/*'],
+
+  main() {
+    console.log('[FairPrice: LEVEL 0] 🚀 Скрипт завантажено для Dnipro-M');
+
+    const adapter = new DniproMAdapter();
+
+    // Замість ручного createRoot, просто викликаємо нашу функцію з injector.tsx
+    const renderReactUI = (container: HTMLElement, history: any[], honestyScore: { score: number; message: string }) => {
+      injectUI(container, history, honestyScore);
+    };
+
+    const controller = new ExtensionController(adapter, renderReactUI);
+    controller.init();
+  },
+});
 ````
 
 ## File: src/entrypoints/rozetka.content.tsx
@@ -426,47 +632,15 @@ export default defineContentScript({
 });
 ````
 
-## File: src/store/usePriceStore.ts
-````typescript
-// Placeholder for usePriceStore.ts (Zustand + chrome.storage)
-// export const usePriceStore = create(...)
-
-export const usePriceStore = {
-    // TODO: Implement Zustand store with chrome.storage persistence
-};
-````
-
-## File: src/types/css.d.ts
-````typescript
-declare module '*.css';
-````
-
-## File: src/types/env.d.ts
-````typescript
-interface ImportMetaEnv {
-    readonly VITE_SUPABASE_URL: string;
-    readonly VITE_SUPABASE_ANON_KEY: string;
-}
-
-interface ImportMeta {
-    readonly env: ImportMetaEnv;
-}
-````
-
 ## File: src/types/index.d.ts
 ````typescript
-export interface ProductData {
-    url: string;
-    title: string;
-    currentPrice: number;
-    oldPrice: number | null;
-    store: 'rozetka' | 'dnipro-m';
-}
+export { ProductData } from '../adapters/IPriceAdapter';
 
 export interface HistoryRecord {
     price: number;
     old_price: number | null;
-    created_at: string;
+    promo_name: string | null; // Додано поле для історії
+    created_at: string;        // Дата з Supabase (valid_from)
 }
 
 export interface HonestyScore {
@@ -486,211 +660,193 @@ export interface SaveProductMessage {
 
 export interface GetHistoryMessage {
     type: 'GET_HISTORY';
-    payload: { url: string };
+    payload: {
+        url: string;
+        sku?: string; // Можна шукати і за SKU, якщо захочемо в майбутньому
+    };
+}
+export interface SetIconMessage {
+    type: 'SET_ICON';
+    payload: {
+        status: 'success' | 'error' | 'inactive';
+    };
 }
 
-export type ExtensionMessage = SaveProductMessage | GetHistoryMessage;
+export type ExtensionMessage = SaveProductMessage | GetHistoryMessage | SetIconMessage;
 ````
 
 ## File: src/ui/components/PriceChart.tsx
 ````typescript
-import React from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import React, { useState } from 'react';
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid, ReferenceLine
+} from 'recharts';
 
 type PriceHistory = {
   price: number;
   oldPrice?: number | null;
   promoName?: string | null;
-  date: number;
+  date: string | number;
 };
 
 interface PriceChartProps {
   data: PriceHistory[];
-  honesty: {
-    score: number;
-    message: string;
-  };
+  honesty: { score: number; message: string; };
 }
 
-export const PriceChart = ({ data, honesty }: PriceChartProps) => {
-  if (!data || data.length === 0) {
-    return (
-        <div className="flex flex-col gap-2 p-4 bg-slate-800 rounded-xl text-white">
-          <p className="text-sm text-slate-400 text-center">
-            Недостатньо даних для побудови графіка.
-          </p>
-        </div>
-    );
-  }
+// Хелпери
+function scoreColor(score: number) {
+  if (score < 40) return { text: 'text-rose-500', stroke: '#f43f5e', bg: 'bg-rose-500/10', border: 'border-rose-500/20' };
+  if (score < 70) return { text: 'text-amber-500', stroke: '#f59e0b', bg: 'bg-amber-500/10', border: 'border-amber-500/20' };
+  return { text: 'text-emerald-500', stroke: '#10b981', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
+}
 
-  const isCollecting = honesty.score === -1;
+function formatPrice(v: number) { return v.toLocaleString('uk-UA') + ' ₴'; }
 
-  if (isCollecting && data.length < 3) {
-    const currentPrice = data[data.length - 1]?.price;
-    return (
-        <div className="flex flex-col gap-3 p-4 bg-slate-800 rounded-xl text-white">
-          {/* Заголовок */}
-          <div className="flex items-center justify-between">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">
-            Чесна Ціна — Моніторинг
-          </span>
-            <span className="text-[10px] text-slate-500">
-            {data.length} / 3+ записів
-          </span>
-          </div>
-
-          {/* Поточна ціна */}
-          {currentPrice && (
-              <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-emerald-400">
-              {currentPrice.toLocaleString('uk-UA')} ₴
-            </span>
-                <span className="text-xs text-slate-400">поточна ціна</span>
-              </div>
-          )}
-
-          {/* Прогрес-бар збору даних */}
-          <div className="flex flex-col gap-1">
-            <div className="w-full bg-slate-700 rounded-full h-1.5">
-              <div
-                  className="bg-amber-400 h-1.5 rounded-full transition-all"
-                  style={{ width: `${Math.min((data.length / 3) * 100, 100)}%` }}
-              />
-            </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              {honesty.message} Щоразу як ви відкриваєте сторінку — ціна фіксується.
-            </p>
-          </div>
-        </div>
-    );
-  }
-
-  // Визначаємо колірну схему на основі скорингу
-  const getScoreColor = (score: number) => {
-    if (score === -1) return 'text-slate-400';
-    if (score < 40) return 'text-rose-500';
-    if (score < 70) return 'text-amber-500';
-    return 'text-emerald-500';
-  };
-
-  const getScoreBg = (score: number) => {
-    if (score < 40) return 'bg-rose-500/10 border-rose-500/20';
-    if (score < 70) return 'bg-amber-500/10 border-amber-500/20';
-    return 'bg-emerald-500/10 border-emerald-500/20';
-  };
-
-  const groupedByDay = data.reduce((acc, item) => {
-    const dateObj = new Date(item.date);
-    const dateStr = dateObj.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' });
-
-    acc[dateStr] = {
-      dateStr,
-      fullDate: dateObj.toLocaleDateString('uk-UA', { day: '2-digit', month: 'long', year: 'numeric' }),
-      price: Math.round(item.price),
-      oldPrice: item.oldPrice ? Math.round(item.oldPrice) : null,
-      promoName: item.promoName,
-      timestamp: item.date
-    };
-    return acc;
-  }, {} as Record<string, any>);
-
-  let chartData = Object.values(groupedByDay)
-      .sort((a, b) => a.timestamp - b.timestamp)
-      .slice(-14);
-
-  if (chartData.length === 1) {
-    const today = chartData[0];
-    chartData = [{ ...today, dateStr: 'Початок', fullDate: 'Моніторинг розпочато' }, today];
-  }
-
-  const prices = chartData.flatMap(d => d.oldPrice ? [d.price, d.oldPrice] : [d.price]);
-  const minPrice = Math.min(...prices);
-  const maxPrice = Math.max(...prices);
-  const padding = Math.max((maxPrice - minPrice) * 0.2, 100);
-
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const item = payload[0].payload;
-      return (
-          <div className="p-3 bg-slate-900/95 border border-slate-700 rounded-lg text-white shadow-xl z-50 min-w-[150px]">
-            <p className="text-[10px] text-slate-400 font-bold uppercase mb-2">{item.fullDate}</p>
-            {item.promoName && (
-                <div className="mb-2">
-                  <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-400/20 text-amber-400 border border-amber-400/30">
-                    {item.promoName}
-                  </span>
-                </div>
-            )}
-            <div className="flex flex-col gap-0.5">
-              <p className="text-sm font-black text-emerald-400">{item.price} ₴ <span className="text-[10px] font-normal text-slate-400 ml-1">поточна</span></p>
-              {item.oldPrice && item.oldPrice > item.price && (
-                  <p className="text-xs text-slate-400 line-through decoration-rose-500/70">{item.oldPrice} ₴ <span className="text-[10px] font-normal no-underline ml-1">без знижки</span></p>
-              )}
-            </div>
-          </div>
-      );
-    }
-    return null;
-  };
+// Круговий індикатор чесності
+const ScoreRing = ({ score }: { score: number }) => {
+  const colors = scoreColor(score);
+  const r = 28;
+  const circ = 2 * Math.PI * r;
+  const filled = (score / 100) * circ;
+  const label = score < 40 ? 'Підозрілий' : score < 70 ? 'Сумнівний' : 'Чесний';
+  const emoji  = score < 40 ? '🚨' : score < 70 ? '⚠️' : '✅';
 
   return (
-      <div className="flex flex-col w-full h-full gap-4">
-        {/* Новий блок рейтингу чесності */}
-        <div className={`p-3 rounded-lg border ${getScoreBg(honesty.score)} flex flex-col gap-1`}>
-          <div className="flex justify-between items-center">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500">
-              Аналіз чесності знижки
-            </span>
-            <span className={`text-xl font-black ${getScoreColor(honesty.score)}`}>
-              {honesty.score === -1 ? '???' : `${honesty.score}%`}
-            </span>
+      <div className="flex items-center gap-3">
+        <div className="relative w-[72px] h-[72px] shrink-0">
+          <svg width="72" height="72" viewBox="0 0 72 72" className="-rotate-90">
+            <circle cx="36" cy="36" r={r} fill="none" className="stroke-white/5" strokeWidth="6" />
+            <circle
+                cx="36" cy="36" r={r} fill="none"
+                stroke={colors.stroke} strokeWidth="6" strokeLinecap="round"
+                strokeDasharray={`${filled} ${circ}`}
+                className="transition-all duration-700 ease-out"
+            />
+          </svg>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className={`text-base font-black ${colors.text}`}>{score}%</span>
           </div>
-          <p className="text-xs font-medium text-slate-700 leading-relaxed">
-            {honesty.message}
-          </p>
         </div>
-
-        {/* Графік */}
-        <div className="w-full h-[200px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
-              <XAxis dataKey="dateStr" stroke="#94a3b8" fontSize={11} fontWeight={500} tickLine={false} axisLine={false} tickMargin={12} />
-              <YAxis domain={[Math.max(0, minPrice - padding), maxPrice + padding]} hide />
-              <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#64748b', strokeWidth: 1, strokeDasharray: '4 4' }} />
-              <Line type="monotone" dataKey="oldPrice" stroke="#64748b" strokeWidth={2} strokeDasharray="4 4" dot={false} activeDot={false} connectNulls />
-              <Line type="monotone" dataKey="price" stroke="#34d399" strokeWidth={3} dot={{ r: 4, fill: '#34d399', strokeWidth: 2, stroke: '#1e293b' }} activeDot={{ r: 6, fill: '#10b981', strokeWidth: 0 }} animationDuration={1000} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Легенда */}
-        <div className="flex justify-center gap-4">
-          <div className="flex items-center gap-1.5 leading-none">
-            <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Ціна зі знижкою</span>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">Аналіз чесності</span>
+            <span className="text-xs">{emoji}</span>
           </div>
-          <div className="flex items-center gap-1.5 leading-none">
-            <span className="w-2 h-2 rounded-full border-2 border-slate-400 border-dashed"></span>
-            <span className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">Без знижки</span>
-          </div>
+          <span className={`text-sm font-extrabold ${colors.text}`}>{label}</span>
         </div>
       </div>
   );
 };
-````
 
-## File: src/ui/styles.css
-````css
-@import "tailwindcss";
+const CollectingCard = ({ count, message }: { count: number; message: string }) => (
+    <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-5 flex flex-col gap-4 shadow-xl font-sans">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">
+          Починаємо моніторинг
+        </span>
+        </div>
+        <span className="text-xs text-emerald-400 font-black px-2 py-1 bg-emerald-400/10 rounded-md">
+        {count} / 3 записи
+      </span>
+      </div>
 
-:host {
-    all: initial;
-    font-size: 16px !important;
-    line-height: 1.5 !important;
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    display: block;
-}
+      <div className="flex flex-col gap-2">
+        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+          <div
+              className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700 ease-out"
+              style={{ width: `${Math.min((count / 3) * 100, 100)}%` }}
+          />
+        </div>
+        <p className="text-sm text-slate-300 leading-relaxed mt-1">
+          Першу ціну зафіксовано! 🕵️‍♂️ Щоб показати точний графік та перевірити чесність знижки, нам потрібно зібрати трохи більше історії.
+        </p>
+        <p className="text-xs text-slate-500 mt-1">
+          Завітайте сюди пізніше — розширення автоматично стежить за змінами.
+        </p>
+      </div>
+    </div>
+);
+
+// Головний компонент
+export const PriceChart = ({ data, honesty }: PriceChartProps) => {
+  if (!data || data.length === 0) {
+    return <div className="p-4 rounded-2xl bg-slate-900/90 text-slate-400 text-xs text-center">Недостатньо даних.</div>;
+  }
+
+  const normalizedData = data
+      .map(item => ({ ...item, timestamp: new Date(item.date).getTime() }))
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+  if (honesty.score === -1 && normalizedData.length < 3) {
+    return <CollectingCard count={normalizedData.length} message={honesty.message} />;
+  }
+
+  // Підготовка даних для графіка (групування по днях)
+  const groupedByDay = normalizedData.reduce((acc, item) => {
+    const dateObj = new Date(item.date);
+    if (isNaN(dateObj.getTime())) return acc;
+    const dateStr = dateObj.toLocaleDateString('uk-UA', { day: '2-digit', month: 'short' });
+    acc[dateStr] = {
+      dateStr,
+      price: Math.round(item.price),
+      oldPrice: item.oldPrice ? Math.round(item.oldPrice) : null,
+      timestamp: item.timestamp,
+    };
+    return acc;
+  }, {} as Record<string, any>);
+
+  const chartData = Object.values(groupedByDay).sort((a: any, b: any) => a.timestamp - b.timestamp).slice(-14);
+  const colors = scoreColor(honesty.score);
+
+  return (
+      <div className="flex flex-col gap-3 bg-gradient-to-br from-slate-900/95 to-slate-800/95 rounded-2xl border border-white/5 p-4 shadow-xl">
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">FairPrice</span>
+            <span className="text-xs text-slate-400 font-medium">Історія цін · {chartData.length} записів</span>
+          </div>
+        </div>
+
+        <div className={`p-2.5 rounded-xl ${colors.bg} ${colors.border} border text-xs text-slate-300 font-medium leading-relaxed`}>
+          {honesty.message}
+        </div>
+
+        {/* Графік Recharts */}
+        <div className="w-full h-[180px] mt-2">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gradPrice" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+              <XAxis dataKey="dateStr" stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
+              <YAxis stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} width={40} />
+              <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }} itemStyle={{ color: '#10b981' }} />
+              <Area type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2.5} fill="url(#gradPrice)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Легенда та оцінка */}
+        <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-1 rounded-full bg-emerald-500" />
+              <span className="text-[10px] text-slate-400 font-medium">Ціна зі знижкою</span>
+            </div>
+          </div>
+          {honesty.score !== -1 && <ScoreRing score={honesty.score} />}
+        </div>
+      </div>
+  );
+};
 ````
 
 ## File: src/utils/domUtils.ts
@@ -756,41 +912,6 @@ export function observeSPA(onUrlChange: (newUrl: string) => void) {
 }
 ````
 
-## File: src/utils/hydrationParser.ts
-````typescript
-export class HydrationParser {
-    static parseNextData(): any {
-        const script = document.getElementById('__NEXT_DATA__');
-        if (script) {
-            try {
-                const data = JSON.parse(script.textContent || '{}');
-                // Шлях до даних у Dnipro-M зазвичай лежить у props.pageProps
-                return data?.props?.pageProps || null;
-            } catch (e) {
-                console.error('[FairPrice] Помилка парсингу __NEXT_DATA__', e);
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Специфічний мапінг для Dnipro-M
-     */
-    static getDniproMProduct(data: any) {
-        if (!data || !data.product) return null;
-
-        const p = data.product;
-        return {
-            externalId: String(p.id),
-            title: p.title,
-            currentPrice: p.price, // Тут ціна вже зазвичай у форматі number
-            oldPrice: p.oldPrice || null,
-            isAvailable: p.isAvailable ?? true
-        };
-    }
-}
-````
-
 ## File: src/utils/supabaseClient.ts
 ````typescript
 import { createClient } from '@supabase/supabase-js';
@@ -798,16 +919,6 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 export const supabase = createClient(supabaseUrl, supabaseKey);
-````
-
-## File: .gitignore
-````
-.idea/
-*.DS_Store
-node_modules/
-dist/
-build/
-.output/
 ````
 
 ## File: tsconfig.json
@@ -833,116 +944,6 @@ build/
     "src/**/*",
     ".wxt/types/**/*"
   ]
-}
-````
-
-## File: src/ui/injector.tsx
-````typescript
-import { createRoot, Root } from 'react-dom/client';
-import { PriceChart } from './components/PriceChart';
-
-let reactRoot: Root | null = null;
-let mountContainer: HTMLElement | null = null;
-
-// Базові стилі для Shadow DOM (Tailwind utility-first через CDN play)
-const BASE_STYLES = `
-  @import url('https://cdn.jsdelivr.net/npm/tailwindcss@3/base.css');
-  
-  *, *::before, *::after { box-sizing: border-box; }
-  :host { all: initial; display: block; font-family: ui-sans-serif, system-ui, sans-serif; }
-  
-  .flex { display: flex; } .flex-col { flex-direction: column; }
-  .gap-1 { gap: 0.25rem; } .gap-2 { gap: 0.5rem; } .gap-3 { gap: 0.75rem; } .gap-4 { gap: 1rem; }
-  .items-center { align-items: center; } .items-baseline { align-items: baseline; }
-  .justify-between { justify-content: space-between; } .justify-center { justify-content: center; }
-  .w-full { width: 100%; } .h-full { height: 100%; } .h-\\[200px\\] { height: 200px; }
-  .w-2 { width: 0.5rem; } .h-2 { height: 0.5rem; } .h-1\\.5 { height: 0.375rem; }
-  .p-3 { padding: 0.75rem; } .p-4 { padding: 1rem; }
-  .px-1\\.5 { padding-left: 0.375rem; padding-right: 0.375rem; }
-  .py-0\\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
-  .mt-2 { margin-top: 0.5rem; } .ml-1 { margin-left: 0.25rem; }
-  .mb-2 { margin-bottom: 0.5rem; }
-  .rounded { border-radius: 0.25rem; } .rounded-full { border-radius: 9999px; }
-  .rounded-lg { border-radius: 0.5rem; } .rounded-xl { border-radius: 0.75rem; }
-  .border { border-width: 1px; border-style: solid; }
-  .border-2 { border-width: 2px; border-style: solid; }
-  .border-dashed { border-style: dashed; }
-  .text-white { color: #fff; } .text-center { text-align: center; }
-  .text-xs { font-size: 0.75rem; line-height: 1rem; }
-  .text-sm { font-size: 0.875rem; line-height: 1.25rem; }
-  .text-xl { font-size: 1.25rem; line-height: 1.75rem; }
-  .text-2xl { font-size: 1.5rem; line-height: 2rem; }
-  .text-\\[10px\\] { font-size: 10px; }
-  .font-medium { font-weight: 500; } .font-bold { font-weight: 700; }
-  .font-black { font-weight: 900; } .font-normal { font-weight: 400; }
-  .uppercase { text-transform: uppercase; }
-  .tracking-wider { letter-spacing: 0.05em; }
-  .leading-relaxed { line-height: 1.625; } .leading-none { line-height: 1; }
-  .line-through { text-decoration: line-through; }
-  .no-underline { text-decoration: none; }
-  .transition-all { transition: all 0.15s ease; }
-  .inline-block { display: inline-block; }
-  .min-w-\\[150px\\] { min-width: 150px; }
-  .shadow-xl { box-shadow: 0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1); }
-  .z-50 { z-index: 50; }
-  /* Colors */
-  .bg-slate-800 { background-color: #1e293b; }
-  .bg-slate-900\\/95 { background-color: rgba(15,23,42,.95); }
-  .bg-slate-700 { background-color: #334155; }
-  .bg-rose-500\\/10 { background-color: rgba(239,68,68,.1); }
-  .bg-amber-500\\/10 { background-color: rgba(245,158,11,.1); }
-  .bg-emerald-500\\/10 { background-color: rgba(16,185,129,.1); }
-  .bg-amber-400\\/20 { background-color: rgba(251,191,36,.2); }
-  .bg-emerald-400 { background-color: #34d399; }
-  .bg-amber-400 { background-color: #fbbf24; }
-  .border-slate-700 { border-color: #334155; }
-  .border-rose-500\\/20 { border-color: rgba(239,68,68,.2); }
-  .border-amber-500\\/20 { border-color: rgba(245,158,11,.2); }
-  .border-emerald-500\\/20 { border-color: rgba(16,185,129,.2); }
-  .border-amber-400\\/30 { border-color: rgba(251,191,36,.3); }
-  .border-slate-400 { border-color: #94a3b8; }
-  .text-slate-400 { color: #94a3b8; } .text-slate-500 { color: #64748b; }
-  .text-slate-700 { color: #334155; }
-  .text-rose-500 { color: #ef4444; }
-  .text-amber-500 { color: #f59e0b; } .text-amber-400 { color: #fbbf24; }
-  .text-emerald-500 { color: #10b981; } .text-emerald-400 { color: #34d399; }
-  .decoration-rose-500\\/70 { text-decoration-color: rgba(239,68,68,.7); }
-`;
-
-export async function injectUI(
-    targetContainer: HTMLElement,
-    history: any[],
-    honesty: { score: number; message: string }
-) {
-    try {
-        cleanupUI();
-
-        mountContainer = document.createElement('div');
-        mountContainer.id = 'fair-price-shadow-host';
-        mountContainer.style.cssText = 'width:100%; margin-top:20px; display:block;';
-        targetContainer.parentNode?.insertBefore(mountContainer, targetContainer.nextSibling);
-
-        const shadowRoot = mountContainer.attachShadow({ mode: 'open' });
-
-        const styleTag = document.createElement('style');
-        styleTag.textContent = BASE_STYLES;
-        shadowRoot.appendChild(styleTag);
-
-        const reactContainer = document.createElement('div');
-        shadowRoot.appendChild(reactContainer);
-
-        reactRoot = createRoot(reactContainer);
-        reactRoot.render(<PriceChart data={history} honesty={honesty} />);
-
-        console.log('[FairPrice] 🛡️ UI успішно інжектовано');
-    } catch (error) {
-        console.error('[FairPrice] ❌ Помилка інжекту UI:', error);
-    }
-}
-
-export function cleanupUI() {
-    if (reactRoot) { reactRoot.unmount(); reactRoot = null; }
-    if (mountContainer) { mountContainer.remove(); mountContainer = null; }
 }
 ````
 
@@ -979,6 +980,61 @@ export function cleanupUI() {
 }
 ````
 
+## File: src/ui/injector.tsx
+````typescript
+import { createRoot, Root } from 'react-dom/client';
+import { PriceChart } from './components/PriceChart';
+import tailwindStyles from '@/ui/styles.css?inline';
+
+let reactRoot: Root | null = null;
+let mountContainer: HTMLElement | null = null;
+
+const HOST_RESET = `
+  :host { 
+    all: initial; 
+    display: block; 
+    font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; 
+    font-size: 16px !important; 
+  }
+`;
+
+export async function injectUI(
+    targetContainer: HTMLElement,
+    history: any[],
+    honesty: { score: number; message: string }
+) {
+    try {
+        cleanupUI();
+
+        mountContainer = document.createElement('div');
+        mountContainer.id = 'fair-price-shadow-host';
+        mountContainer.style.cssText = 'width: 100%; margin-top: 20px; display: block;';
+
+        targetContainer.parentNode?.insertBefore(mountContainer, targetContainer.nextSibling);
+
+        const shadowRoot = mountContainer.attachShadow({ mode: 'open' });
+
+        const styleTag = document.createElement('style');
+        styleTag.textContent = HOST_RESET + tailwindStyles;
+        shadowRoot.appendChild(styleTag);
+
+        const reactContainer = document.createElement('div');
+        shadowRoot.appendChild(reactContainer);
+
+        reactRoot = createRoot(reactContainer);
+        reactRoot.render(<PriceChart data={history} honesty={honesty} />);
+
+    } catch (error) {
+        console.error('[FairPrice] ❌ Помилка інжекту UI:', error);
+    }
+}
+
+export function cleanupUI() {
+    if (reactRoot) { reactRoot.unmount(); reactRoot = null; }
+    if (mountContainer) { mountContainer.remove(); mountContainer = null; }
+}
+````
+
 ## File: wxt.config.ts
 ````typescript
 import { defineConfig } from 'wxt';
@@ -994,96 +1050,135 @@ export default defineConfig({
     name: "Чесна Ціна (Fair Price)",
     version: "1.0.0",
     description: "Інтелектуальна система моніторингу цін та детекції маніпулятивних знижок",
-    permissions: ["storage", "alarms"],
+    action: {
+      default_title: "Чесна Ціна",
+      default_icon: {
+        "16": "/icons/icon_inactive.png",
+        "48": "/icons/icon_inactive.png",
+        "128": "/icons/icon_inactive.png"
+      }
+    },
+    permissions: [
+      "storage",
+      "alarms",
+      "declarativeNetRequest" // Обов'язково для перехоплення прихованих цін у JSON
+    ],
     host_permissions: [
       "*://dnipro-m.ua/*",
       "*://rozetka.com.ua/*"
     ],
-  },
-  webExt: {
-    startUrls: [
-      "https://dnipro-m.ua/tovar/sadovij-podribnyuvach-gsb-38/",
-    ],
-  },
+  }
 });
 ````
 
 ## File: src/adapters/IPriceAdapter.ts
 ````typescript
-import { ProductData } from '@/types';
+export interface ProductData {
+  externalId: string;
+  name: string;
+  url: string;
+  price: number;        // Ціна в копійках
+  regularPrice: number | null;
+  promoName?: string | null;
+  isAvailable: boolean;
+  hydrationData?: any;  // Дані з Next.js/React
+}
 
 export interface IPriceAdapter {
-  readonly storeName: 'rozetka' | 'dnipro-m';
+  getStoreDomain(): string;
+  isApplicable(): boolean;
 
-  /**
-   * Селектор, після або всередині якого буде інжектований наш графік
-   */
-  readonly injectTargetSelector: string;
+  getProductID(): string | null;
+  getCurrentPrice(): number | null;
+  getOriginalPrice(): number | null;
+  getHydrationData(): any | null;
+  getStockStatus(): boolean;
 
-  /**
-   * Перевіряє, чи відповідає поточний домен цьому адаптеру
-   */
-  matchDomain(hostname: string): boolean;
+  parseProductPage(): Promise<ProductData | null> | ProductData | null;
 
-  /**
-   * Перевіряє, чи ми знаходимось на сторінці конкретного товару
-   */
-  isProductPage(url: string): boolean;
+  isProductPage(): boolean;
+  isCatalogPage(): boolean;
+  parseCatalogPage(): Promise<ProductData[]> | ProductData[];
 
-  /**
-   * Витягує всі необхідні дані зі сторінки.
-   */
-  extractData(): Promise<ProductData | null>;
+  getUIAnchor(): Element | null;
+  getUIInsertMethod(): ContentScriptAppendMode;
 }
 ````
 
 ## File: src/adapters/RozetkaAdapter.ts
 ````typescript
-import { IPriceAdapter } from './IPriceAdapter';
-import { ProductData } from '@/types';
+import { IPriceAdapter, ProductData } from './IPriceAdapter';
 import { waitForElement, parsePrice } from '@/utils/domUtils';
 
 export class RozetkaAdapter implements IPriceAdapter {
-  storeName = 'rozetka' as const;
 
-  // Блок на Розетці, біля якого зазвичай малюють інфу про товар (кнопки купити тощо)
-  injectTargetSelector = '.product-about__right';
+  getStoreDomain(): string { return 'rozetka.com.ua'; }
+  isApplicable(): boolean { return window.location.hostname.includes('rozetka.com.ua'); }
+  isProductPage(): boolean { return window.location.pathname.includes('/p'); }
+  isCatalogPage(): boolean { return !this.isProductPage() && document.querySelector('.catalog-list, .products-list') !== null; }
+  getUIAnchor(): Element | null { return document.querySelector('.product-about__right'); }
+  getUIInsertMethod(): ContentScriptAppendMode { return 'after'; }
 
-  matchDomain(hostname: string): boolean {
-    return hostname.includes('rozetka.com.ua');
+  // Заділ на майбутнє: парсинг стану SSR Розетки
+  getHydrationData(): any | null {
+    return null;
   }
 
-  isProductPage(url: string): boolean {
-    // Розетка використовує /p у шляху для товарів
-    return url.includes('/p');
+  getProductID(): string | null {
+    return document.querySelector('meta[itemprop="sku"]')?.getAttribute('content') || null;
   }
 
-  async extractData(): Promise<ProductData | null> {
+  getCurrentPrice(): number | null {
+    const priceEl = document.querySelector('.product-price__big');
+    return parsePrice(priceEl?.textContent);
+  }
+
+  getOriginalPrice(): number | null {
+    const oldPriceEl = document.querySelector('.product-price__small');
+    return parsePrice(oldPriceEl?.textContent);
+  }
+
+  getStockStatus(): boolean {
+    // Якщо кнопка "Купити" заблокована або відсутня — товару немає
+    const buyButton = document.querySelector('app-buy-button button');
+    return buyButton ? !buyButton.hasAttribute('disabled') : false;
+  }
+
+  async parseProductPage(): Promise<ProductData | null> {
     try {
-      // Очікуємо появи головної ціни, оскільки Розетка - це SPA
+      // Чекаємо саме на ціну, оскільки це SPA
       await waitForElement('.product-price__big');
 
+      const currentPrice = this.getCurrentPrice();
+      if (!currentPrice) {
+        console.error('[FairPrice] ❌ Не вдалося знайти валідну ціну на сторінці Rozetka.');
+        return null;
+      }
+
       const titleEl = document.querySelector('.product__title');
-      const priceEl = document.querySelector('.product-price__big');
-      const oldPriceEl = document.querySelector('.product-price__small');
-
-      const currentPrice = parsePrice(priceEl?.textContent);
-      if (!currentPrice) return null;
-
-      // Відрізаємо GET-параметри від URL, щоб історія зберігалася для одного товару коректно
+      const sku = this.getProductID() || 'unknown';
       const cleanUrl = window.location.origin + window.location.pathname;
 
+      console.log(`[FairPrice] ✅ Знайдено: ${currentPrice} UAH (SKU: ${sku})`);
+
       return {
+        externalId: sku,
+        name: titleEl?.textContent?.trim() || 'Невідомий товар Rozetka',
         url: cleanUrl,
-        title: titleEl?.textContent?.trim() || 'Невідомий товар Rozetka',
-        currentPrice,
-        oldPrice: parsePrice(oldPriceEl?.textContent),
-        store: this.storeName
+        price: Math.round(currentPrice * 100),
+        regularPrice: this.getOriginalPrice() ? Math.round(this.getOriginalPrice()! * 100) : null,
+        promoName: null,
+        isAvailable: this.getStockStatus(),
+        hydrationData: this.getHydrationData()
       };
     } catch (error) {
       console.warn('[FairPrice] RozetkaAdapter: Не вдалося розпарсити дані', error);
       return null;
     }
+  }
+
+  async parseCatalogPage(): Promise<ProductData[]> {
+    return [];
   }
 }
 ````
@@ -1091,57 +1186,65 @@ export class RozetkaAdapter implements IPriceAdapter {
 ## File: src/entrypoints/background.ts
 ````typescript
 import { supabase } from '@/utils/supabaseClient';
-import { SaveProductMessage, GetHistoryMessage } from '@/types/messages';
+import { SaveProductMessage, GetHistoryMessage, SetIconMessage } from '@/types/messages';
 
 export default defineBackground(() => {
   console.log('[FairPrice] Background Service Worker запущено.');
 
   browser.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
-    if (message.type === 'SAVE_PRODUCT') {
-      handleSaveProduct(message as SaveProductMessage).then(sendResponse);
-      return true; // Асинхронна відповідь
-    }
+    // Чітка маршрутизація подій
+    switch (message.type) {
+      case 'SAVE_PRODUCT':
+        handleSaveProduct(message as SaveProductMessage).then(sendResponse);
+        return true; // Вказує браузеру чекати на асинхронну відповідь
 
-    if (message.type === 'GET_HISTORY') {
-      handleGetHistory(message as GetHistoryMessage).then(sendResponse);
-      return true; // Асинхронна відповідь
+      case 'GET_HISTORY':
+        handleGetHistory(message as GetHistoryMessage).then(sendResponse);
+        return true;
+
+      case 'SET_ICON':
+        handleSetIcon(message as SetIconMessage, sender).then(sendResponse);
+        return false; // Відповідь не потрібна, відпрацьовує синхронно
+
+      default:
+        console.warn('[FairPrice] Невідомий тип повідомлення:', message.type);
+        return false;
     }
   });
 
   async function handleSaveProduct(msg: SaveProductMessage) {
     try {
       const { payload } = msg;
+      const urlObj = new URL(payload.url);
+      const storeDomain = urlObj.hostname.replace(/^www\./, '');
 
-      // Мапимо назву стора на домен для RPC
-      const domain = payload.store === 'rozetka' ? 'rozetka.com.ua' : 'dnipro-m.ua';
-
-      // Використовуємо RPC і конвертуємо гривні в копійки
       const { error } = await supabase.rpc('record_price', {
-        p_store_domain: domain,
-        p_external_id: payload.url,
+        p_store_domain: storeDomain,
+        p_external_id: payload.externalId || payload.url,
         p_url: payload.url,
-        p_name: payload.title,
-        p_price: Math.round(payload.currentPrice * 100),
-        p_regular_price: payload.oldPrice ? Math.round(payload.oldPrice * 100) : null,
-        p_is_available: true
+        p_name: payload.name,
+        p_price: Math.round(payload.price),
+        p_regular_price: payload.regularPrice ? Math.round(payload.regularPrice) : null,
+        p_is_available: payload.isAvailable ?? true,
+        p_promo_name: payload.promoName || null
       });
 
       if (error) throw error;
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('[FairPrice] Помилка збереження:', error);
-      return { success: false, error };
+      return { success: false, error: error.message };
     }
   }
 
   async function handleGetHistory(msg: GetHistoryMessage) {
     try {
-      // Робимо JOIN з таблицею products для пошуку по URL
       const { data, error } = await supabase
           .from('price_history')
           .select(`
             price, 
             regular_price, 
+            promo_name,
             valid_from,
             products!inner(url)
           `)
@@ -1150,202 +1253,109 @@ export default defineBackground(() => {
 
       if (error) throw error;
 
-      // Мапимо відповідь для фронтенду і повертаємо копійки назад у гривні
+      // Конвертуємо копійки у гривні для графіка
       const mappedData = data.map((item: any) => ({
         price: item.price / 100,
-        old_price: item.regular_price ? item.regular_price / 100 : null,
-        created_at: item.valid_from // ExtensionController очікує created_at
+        oldPrice: item.regular_price ? item.regular_price / 100 : null,
+        promoName: item.promo_name,
+        date: item.valid_from
       }));
 
       return { success: true, data: mappedData };
-    } catch (error) {
+    } catch (error: any) {
       console.error('[FairPrice] Помилка отримання історії:', error);
-      return { success: false, error: null, data: [] };
+      return { success: false, error: error.message, data: [] };
     }
+  }
+
+  async function handleSetIcon(msg: SetIconMessage, sender: any) {
+    const status = msg.payload.status;
+    const tabId = sender?.tab?.id;
+
+    if (tabId) {
+      try {
+        await browser.action.setIcon({
+          // Важливо: переконайся, що іконки лежать у папці public/icons/
+          path: `/icons/icon_${status}.png`,
+          tabId: tabId
+        });
+      } catch (err) {
+        console.error('[FairPrice] Помилка встановлення іконки', err);
+      }
+    }
+    return { success: true };
   }
 });
 ````
 
 ## File: src/adapters/DniproMAdapter.ts
 ````typescript
-import { IPriceAdapter } from './IPriceAdapter';
-import { ProductData } from '@/types';
+import { IPriceAdapter, ProductData } from './IPriceAdapter';
 import { parsePrice, waitForElement } from '@/utils/domUtils';
+import { HydrationParser } from '@/utils/hydrationParser';
 
 export class DniproMAdapter implements IPriceAdapter {
-    storeName = 'dnipro-m' as const;
-    injectTargetSelector = 'h1';
+  getStoreDomain(): string { return 'dnipro-m.ua'; }
+  isApplicable(): boolean { return window.location.hostname.includes('dnipro-m.ua'); }
+  isProductPage(): boolean { return window.location.pathname.includes('/tovar/'); }
+  isCatalogPage(): boolean { return !this.isProductPage() && document.querySelector('.catalog-list') !== null; }
+  getUIAnchor(): Element | null { return document.querySelector('h1'); }
+  getUIInsertMethod(): ContentScriptAppendMode { return 'after'; }
 
-    matchDomain(hostname: string): boolean {
-        return hostname.includes('dnipro-m.ua');
+  getHydrationData(): any | null {
+    const nextData = HydrationParser.parseNextData();
+    return HydrationParser.getDniproMProduct(nextData);
+  }
+
+  getProductID(): string | null {
+    const hyd = this.getHydrationData();
+    if (hyd?.externalId) return hyd.externalId;
+    return document.querySelector('meta[itemprop="sku"]')?.getAttribute('content') ||
+        document.querySelector('.product-code__code')?.textContent?.trim() || null;
+  }
+
+  getCurrentPrice(): number | null {
+    const hyd = this.getHydrationData();
+    if (hyd?.currentPrice) return parseFloat(hyd.currentPrice);
+    const priceEl = document.querySelector('.product-price__current, .price__current');
+    return parsePrice(priceEl?.textContent);
+  }
+
+  getOriginalPrice(): number | null {
+    const hyd = this.getHydrationData();
+    if (hyd?.oldPrice) return parseFloat(hyd.oldPrice);
+    const oldPriceEl = document.querySelector('.product-price__old, .price__old');
+    return parsePrice(oldPriceEl?.textContent);
+  }
+
+  getStockStatus(): boolean {
+    const hyd = this.getHydrationData();
+    return hyd?.isAvailable !== undefined ? hyd.isAvailable : true;
+  }
+
+  async parseProductPage(): Promise<ProductData | null> {
+    try {
+      await waitForElement('h1', 8000);
+      const currentPrice = this.getCurrentPrice();
+
+      if (!currentPrice || currentPrice < 300) return null;
+
+      return {
+        externalId: this.getProductID() || 'unknown',
+        name: document.querySelector('h1')?.textContent?.trim() || 'Товар Dnipro-M',
+        url: window.location.origin + window.location.pathname,
+        price: Math.round(currentPrice * 100),
+        regularPrice: this.getOriginalPrice() ? Math.round(this.getOriginalPrice()! * 100) : null,
+        promoName: document.querySelector('.badge__text')?.textContent?.trim() || null,
+        isAvailable: this.getStockStatus(),
+        hydrationData: this.getHydrationData()
+      };
+    } catch (error) {
+      console.error('[FairPrice] Помилка:', error);
+      return null;
     }
+  }
 
-    isProductPage(url: string): boolean {
-        return url.includes('/tovar/');
-    }
-
-    async extractData(): Promise<ProductData | null> {
-        try {
-            await waitForElement('h1', 8000);
-            const title = document.querySelector('h1')?.textContent?.trim() || 'Товар Dnipro-M';
-
-            // --- Стратегія 1: ld+json → шукаємо offers.price ---
-            const ldScripts = document.querySelectorAll('script[type="application/ld+json"]');
-            for (const s of Array.from(ldScripts)) {
-                try {
-                    const json = JSON.parse(s.textContent || '{}');
-                    const price = this.extractFromLdJson(json);
-                    if (price) {
-                        console.log('[FairPrice] ✅ ld+json ціна:', price);
-                        return this.buildResult(title, price, null);
-                    }
-                } catch { /* skip */ }
-            }
-
-            // --- Стратегія 2: __NEXT_DATA__ --- глибокий пошук числового price ---
-            const nextScript = document.getElementById('__NEXT_DATA__');
-            if (nextScript) {
-                try {
-                    const json = JSON.parse(nextScript.textContent || '{}');
-                    console.log('[FairPrice] __NEXT_DATA__ pageProps keys:',
-                        Object.keys(json?.props?.pageProps || {}));
-                    const price = this.deepFindPrice(json, 0);
-                    if (price) {
-                        console.log('[FairPrice] ✅ __NEXT_DATA__ ціна:', price);
-                        return this.buildResult(title, price, null);
-                    }
-                } catch { /* skip */ }
-            }
-
-            // --- Стратегія 3: DOM — перебираємо всі варіанти ---
-            console.warn('[FairPrice] JSON не дав результату, пробуємо DOM...');
-            const domResult = this.extractFromDOM();
-            if (domResult) {
-                console.log('[FairPrice] ✅ DOM ціна:', domResult);
-                const oldPrice = parsePrice(
-                    document.querySelector('.product-card-info__price-old, .price__old, [class*="price-old"], [class*="old-price"]')?.textContent
-                );
-                return this.buildResult(title, domResult, oldPrice);
-            }
-
-            // --- Стратегія 4: Регулярка по всьому тексту сторінки ---
-            console.warn('[FairPrice] DOM не дав результату, регулярка...');
-            const bodyText = document.body.innerText;
-            // Шукаємо патерн "4 998 ₴" або "4998 грн" або просто велике число
-            const priceMatch = bodyText.match(/(\d[\d\s]{2,6})\s*(?:₴|грн)/);
-            if (priceMatch) {
-                const price = parseFloat(priceMatch[1].replace(/\s/g, ''));
-                if (price > 0) {
-                    console.log('[FairPrice] ✅ Регулярка ціна:', price);
-                    return this.buildResult(title, price, null);
-                }
-            }
-
-            console.error('[FairPrice] ❌ Ціну не знайдено жодним методом.');
-            return null;
-
-        } catch (error) {
-            console.error('[FairPrice] Помилка extractData:', error);
-            return null;
-        }
-    }
-
-    private extractFromLdJson(obj: any): number | null {
-        if (!obj || typeof obj !== 'object') return null;
-
-        // Якщо це Product з offers
-        if (obj['@type'] === 'Product' && obj.offers) {
-            const offer = Array.isArray(obj.offers) ? obj.offers[0] : obj.offers;
-            const raw = offer?.price ?? offer?.lowPrice ?? offer?.highPrice;
-            if (raw !== undefined && raw !== null) {
-                const p = typeof raw === 'string' ? parseFloat(raw.replace(/[^\d.]/g, '')) : raw;
-                if (p > 0) return p;
-            }
-        }
-
-        // Рекурсивно по масивах і об'єктах
-        if (Array.isArray(obj)) {
-            for (const item of obj) {
-                const found = this.extractFromLdJson(item);
-                if (found) return found;
-            }
-        } else {
-            for (const key of Object.keys(obj)) {
-                const found = this.extractFromLdJson(obj[key]);
-                if (found) return found;
-            }
-        }
-        return null;
-    }
-
-    private deepFindPrice(obj: any, depth: number): number | null {
-        if (depth > 15 || !obj || typeof obj !== 'object') return null;
-
-        // Пріоритетні ключі
-        const priceKeys = ['price', 'currentPrice', 'salePrice', 'offerPrice', 'sellPrice', 'cost'];
-        for (const key of priceKeys) {
-            if (key in obj) {
-                const val = obj[key];
-                if (typeof val === 'number' && val > 10 && val < 10_000_000) return val;
-                if (typeof val === 'string') {
-                    const p = parseFloat(val.replace(/[^\d.]/g, ''));
-                    if (!isNaN(p) && p > 10 && p < 10_000_000) return p;
-                }
-            }
-        }
-
-        // Рекурсія
-        for (const key of Object.keys(obj)) {
-            const found = this.deepFindPrice(obj[key], depth + 1);
-            if (found) return found;
-        }
-        return null;
-    }
-
-    private extractFromDOM(): number | null {
-        const selectors = [
-            // meta/itemprop — найнадійніше
-            'meta[itemprop="price"]',            // <meta content="4998">
-            '[itemprop="price"][content]',
-            '[itemprop="price"]',
-            // Специфічні класи Dnipro-M
-            '.product-card-info__price-current',
-            '.product-card-info__price',
-            '.price__value',
-            '.price-block__price',
-            // Загальні
-            '[class*="current-price"]',
-            '[class*="price-current"]',
-            '[class*="price__current"]',
-            '[class*="sale-price"]',
-        ];
-
-        for (const sel of selectors) {
-            const el = document.querySelector(sel);
-            if (!el) continue;
-
-            // Спочатку content-атрибут (SEO-розмітка)
-            const content = el.getAttribute('content') || el.getAttribute('data-price');
-            if (content) {
-                const p = parseFloat(content.replace(/[^\d.]/g, ''));
-                if (p > 0) { console.log(`[FairPrice] DOM[${sel}] content="${content}"`); return p; }
-            }
-
-            // Потім textContent
-            const p = parsePrice(el.textContent);
-            if (p && p > 0) { console.log(`[FairPrice] DOM[${sel}] text="${el.textContent?.trim()}"`); return p; }
-        }
-        return null;
-    }
-
-    private buildResult(title: string, price: number, oldPrice: number | null): ProductData {
-        return {
-            url: window.location.origin + window.location.pathname,
-            title,
-            currentPrice: price,&3!#sTW"cA#EB&Q
-            oldPrice,
-            store: this.storeName
-        };
-    }
+  async parseCatalogPage(): Promise<ProductData[]> { return []; }
 }
 ````

@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
-  AreaChart, Area, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, ReferenceLine
+  AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
 
 type PriceHistory = {
@@ -22,8 +21,6 @@ function scoreColor(score: number) {
   if (score < 70) return { text: 'text-amber-500', stroke: '#f59e0b', bg: 'bg-amber-500/10', border: 'border-amber-500/20' };
   return { text: 'text-emerald-500', stroke: '#10b981', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' };
 }
-
-function formatPrice(v: number) { return v.toLocaleString('uk-UA') + ' ₴'; }
 
 // Круговий індикатор чесності
 const ScoreRing = ({ score }: { score: number }) => {
@@ -61,20 +58,16 @@ const ScoreRing = ({ score }: { score: number }) => {
   );
 };
 
+// Стан збору даних
 const CollectingCard = ({ count, message }: { count: number; message: string }) => (
     <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-5 flex flex-col gap-4 shadow-xl font-sans">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">
-          Починаємо моніторинг
-        </span>
+          <span className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">Починаємо моніторинг</span>
         </div>
-        <span className="text-xs text-emerald-400 font-black px-2 py-1 bg-emerald-400/10 rounded-md">
-        {count} / 3 записи
-      </span>
+        <span className="text-xs text-emerald-400 font-black px-2 py-1 bg-emerald-400/10 rounded-md">{count} / 3 записи</span>
       </div>
-
       <div className="flex flex-col gap-2">
         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
           <div
@@ -85,15 +78,30 @@ const CollectingCard = ({ count, message }: { count: number; message: string }) 
         <p className="text-sm text-slate-300 leading-relaxed mt-1">
           Першу ціну зафіксовано! 🕵️‍♂️ Щоб показати точний графік та перевірити чесність знижки, нам потрібно зібрати трохи більше історії.
         </p>
-        <p className="text-xs text-slate-500 mt-1">
-          Завітайте сюди пізніше — розширення автоматично стежить за змінами.
-        </p>
       </div>
     </div>
 );
 
 // Головний компонент
 export const PriceChart = ({ data, honesty }: PriceChartProps) => {
+  // Використовуємо власне вимірювання ширини замість ResponsiveContainer
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [chartWidth, setChartWidth] = useState(0);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    // ResizeObserver безпечно працює всередині Shadow DOM
+    const observer = new ResizeObserver((entries) => {
+      for (let entry of entries) {
+        setChartWidth(entry.contentRect.width);
+      }
+    });
+
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   if (!data || data.length === 0) {
     return <div className="p-4 rounded-2xl bg-slate-900/90 text-slate-400 text-xs text-center">Недостатньо даних.</div>;
   }
@@ -106,7 +114,6 @@ export const PriceChart = ({ data, honesty }: PriceChartProps) => {
     return <CollectingCard count={normalizedData.length} message={honesty.message} />;
   }
 
-  // Підготовка даних для графіка (групування по днях)
   const groupedByDay = normalizedData.reduce((acc, item) => {
     const dateObj = new Date(item.date);
     if (isNaN(dateObj.getTime())) return acc;
@@ -124,7 +131,7 @@ export const PriceChart = ({ data, honesty }: PriceChartProps) => {
   const colors = scoreColor(honesty.score);
 
   return (
-      <div className="flex flex-col gap-3 bg-gradient-to-br from-slate-900/95 to-slate-800/95 rounded-2xl border border-white/5 p-4 shadow-xl">
+      <div className="flex flex-col gap-3 bg-gradient-to-br from-slate-900/95 to-slate-800/95 rounded-2xl border border-white/5 p-4 shadow-xl font-sans">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">FairPrice</span>
@@ -136,26 +143,25 @@ export const PriceChart = ({ data, honesty }: PriceChartProps) => {
           {honesty.message}
         </div>
 
-        {/* Графік Recharts */}
-        <div className="w-full h-[180px] mt-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
-              <defs>
-                <linearGradient id="gradPrice" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-              <XAxis dataKey="dateStr" stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
-              <YAxis stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} width={40} />
-              <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px' }} itemStyle={{ color: '#10b981' }} />
-              <Area type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2.5} fill="url(#gradPrice)" />
-            </AreaChart>
-          </ResponsiveContainer>
+        {/* Безпечний контейнер для графіка */}
+        <div className="w-full h-[180px] mt-2 relative" ref={containerRef}>
+          {chartWidth > 0 && (
+              <AreaChart width={chartWidth} height={180} data={chartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="gradPrice" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
+                <XAxis dataKey="dateStr" stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                <YAxis stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} width={40} />
+                <Tooltip isAnimationActive={false} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: '#10b981' }} />
+                <Area isAnimationActive={false} type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2.5} fill="url(#gradPrice)" />
+              </AreaChart>
+          )}
         </div>
 
-        {/* Легенда та оцінка */}
         <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">

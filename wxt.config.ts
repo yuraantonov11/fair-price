@@ -28,5 +28,16 @@ export default defineConfig({
       "*://dnipro-m.ua/*",
       "*://rozetka.com.ua/*"
     ],
+    browser_specific_settings: {
+      gecko: {
+        id: "fairprice@yuraantonov.com",
+        strict_min_version: "109.0"
+      }
+    }
+  },
+  webExt: {
+    binaries: {
+      firefox: 'C:/Program Files/Firefox Developer Edition/firefox.exe'
+    }
   }
 });
