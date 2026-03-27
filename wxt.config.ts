@@ -8,21 +8,30 @@ export default defineConfig({
     plugins: [tailwindcss()],
   }),
   manifest: {
-    name: "Чесна Ціна (Fair Price)",
+    name: "Чесна Ціна",
+    short_name: "FairPrice",
     version: "1.0.0",
-    description: "Інтелектуальна система моніторингу цін та детекції маніпулятивних знижок",
+    description: "Автоматичний моніторинг цін та перевірка реальності знижок в українських інтернет-магазинах.",
+    author: {
+      email: "yuraantonov11@gmail.com"
+    },
+    icons: {
+      "16": "icons/icon_inactive.png",
+      "48": "icons/icon_inactive.png",
+      "128": "icons/icon_inactive.png"
+    },
     action: {
       default_title: "Чесна Ціна",
       default_icon: {
-        "16": "/icons/icon_inactive.png",
-        "48": "/icons/icon_inactive.png",
-        "128": "/icons/icon_inactive.png"
+        "16": "icons/icon_inactive.png",
+        "48": "icons/icon_inactive.png",
+        "128": "icons/icon_inactive.png"
       }
     },
     permissions: [
       "storage",
       "alarms",
-      "declarativeNetRequest" // Обов'язково для перехоплення прихованих цін у JSON
+      "declarativeNetRequest"
     ],
     host_permissions: [
       "*://dnipro-m.ua/*",

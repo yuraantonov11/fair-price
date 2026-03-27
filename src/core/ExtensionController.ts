@@ -8,6 +8,11 @@ export class ExtensionController {
     private mountPoint: HTMLElement | null = null;
     private observer: MutationObserver | null = null;
 
+    // Кеш для відновлення після агресивних перемалювань (Angular/React)
+    private cachedHistory: any[] | null = null;
+    private cachedHonestyScore: { score: number; message: string } | null = null;
+    private isProcessing = false;
+
     constructor(
         adapter: IPriceAdapter,
         private renderUI: (container: HTMLElement, history: any[], honestyScore: { score: number; message: string }) => void
@@ -24,13 +29,25 @@ export class ExtensionController {
         this.observer = new MutationObserver(() => {
             const url = location.href;
             if (url !== this.currentUrl) {
+                // Сценарій 1: Користувач перейшов на іншу сторінку
                 this.currentUrl = url;
                 console.log('[FairPrice] Виявлено SPA навігацію. Перезапуск...');
                 this.cleanup();
-                // Дебаунс для того, щоб React/Next.js встиг відрендерити новий DOM
                 setTimeout(() => this.processPage(), 500);
+            } else if (this.adapter.isProductPage() && this.cachedHistory && this.cachedHonestyScore && !this.isProcessing) {
+                // Сценарій 2: URL той самий, але фреймворк магазину видалив наш графік з DOM
+                if (!document.getElementById('fair-price-container')) {
+                    const anchor = this.adapter.getUIAnchor();
+                    // Відновлюємо тільки якщо якір існує (сторінка не перезавантажується повністю)
+                    if (anchor) {
+                        console.log('[FairPrice] Angular/SPA видалив графік. Відновлюємо з кешу...');
+                        this.mountPoint = null; // Скидаємо посилання на старий, видалений елемент
+                        this.injectUI(this.cachedHistory, this.cachedHonestyScore);
+                    }
+                }
             }
         });
+
         this.observer.observe(document, { subtree: true, childList: true });
     }
 
@@ -39,17 +56,26 @@ export class ExtensionController {
             this.mountPoint.remove();
             this.mountPoint = null;
         }
+        this.cachedHistory = null;
+        this.cachedHonestyScore = null;
     }
 
     private async processPage() {
+        if (this.isProcessing) return;
+        this.isProcessing = true;
+
         if (!this.adapter.isProductPage()) {
             MessageRouter.send({ type: 'SET_ICON', payload: { status: 'inactive' } }).catch(() => {});
+            this.isProcessing = false;
             return;
         }
 
         try {
             const productData = await this.adapter.parseProductPage();
-            if (!productData) return;
+            if (!productData) {
+                this.isProcessing = false;
+                return;
+            }
 
             await MessageRouter.send({ type: 'SAVE_PRODUCT', payload: productData });
 
@@ -70,25 +96,19 @@ export class ExtensionController {
             // ==========================================
             // 🛠 РЕЖИМ РОЗРОБНИКА (MOCK DATA)
             // ==========================================
-            const DEV_MODE = true; // Зміни на false перед релізом!
-
-            // Змінюй це значення для тестування різних станів:
-            // 'FAKE'       - Маніпуляція (штучне підняття перед акцією)
-            // 'HONEST'     - Дійсно вигідна і чесна знижка
-            // 'COLLECTING' - Недостатньо даних (менше 3 записів)
+            const DEV_MODE = false; // Зміни на false перед релізом!
             const SCENARIO: 'FAKE' | 'HONEST' | 'COLLECTING' = 'FAKE';
 
             if (DEV_MODE) {
-                console.warn(`[FairPrice: DEV MODE] Увімкнено сценарій: ${SCENARIO}`);
                 const now = Date.now();
                 const day = 24 * 60 * 60 * 1000;
 
                 if (SCENARIO === 'FAKE') {
-                    productData.price = 1999 * 100; // Підміняємо поточну ціну
+                    productData.price = 1999 * 100;
                     mappedHistory = [
                         { price: 2500, oldPrice: null, promoName: null, date: now - 60 * day },
                         { price: 2400, oldPrice: 2800, promoName: 'Весняний розпродаж', date: now - 30 * day },
-                        { price: 3200, oldPrice: null, promoName: null, date: now - 12 * day }, // Стрибок
+                        { price: 3200, oldPrice: null, promoName: null, date: now - 12 * day },
                         { price: 1999, oldPrice: 3500, promoName: 'Супер Знижка', date: now }
                     ];
                 }
@@ -99,7 +119,7 @@ export class ExtensionController {
                         { price: 2500, oldPrice: null, promoName: null, date: now - 45 * day },
                         { price: 2450, oldPrice: null, promoName: null, date: now - 30 * day },
                         { price: 2450, oldPrice: null, promoName: null, date: now - 10 * day },
-                        { price: 1800, oldPrice: 2450, promoName: 'Чесний Розпродаж', date: now } // Реальне падіння
+                        { price: 1800, oldPrice: 2450, promoName: 'Чесний Розпродаж', date: now }
                     ];
                 }
                 else if (SCENARIO === 'COLLECTING') {
@@ -113,7 +133,6 @@ export class ExtensionController {
 
             const volatility = this.adapter.getStoreDomain() === 'dnipro-m.ua' ? 0.08 : 0.15;
 
-            // Передаємо поточну ціну (справжню або підмінену тестову)
             const honestyResult = HonestyCalculator.calculate(
                 productData.price / 100,
                 mappedHistory,
@@ -123,10 +142,16 @@ export class ExtensionController {
             const iconStatus = honestyResult.score === -1 ? 'inactive' : (honestyResult.score < 40 ? 'error' : 'success');
             MessageRouter.send({ type: 'SET_ICON', payload: { status: iconStatus } }).catch(() => {});
 
+            // Зберігаємо в кеш для моментального відновлення
+            this.cachedHistory = mappedHistory;
+            this.cachedHonestyScore = honestyResult;
+
             await this.injectUI(mappedHistory, honestyResult);
 
         } catch (error) {
             console.error('[FairPrice] ❌ Помилка обробки сторінки:', error);
+        } finally {
+            this.isProcessing = false;
         }
     }
 
@@ -134,10 +159,12 @@ export class ExtensionController {
         const anchor = this.adapter.getUIAnchor();
         if (!anchor) return;
 
-        if (!this.mountPoint) {
+        // Перевіряємо, чи контейнер відсутній фізично в DOM
+        if (!this.mountPoint || !document.contains(this.mountPoint)) {
             this.mountPoint = document.createElement('div');
             this.mountPoint.id = 'fair-price-container';
-            this.mountPoint.className = 'w-full mt-4 mb-4 z-50 block'; // Tailwind замість inline-стилів
+            // Додані відступи (my-4) та очищення обтікання, щоб макет магазину не "наїжджав" на графік
+            this.mountPoint.className = 'w-full my-4 z-[999] block clear-both';
 
             const insertMethod = this.adapter.getUIInsertMethod();
             if (insertMethod === 'after') {

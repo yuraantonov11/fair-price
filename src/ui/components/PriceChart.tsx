@@ -33,7 +33,7 @@ const ScoreRing = ({ score }: { score: number }) => {
 
   return (
       <div className="flex items-center gap-3">
-        <div className="relative w-[72px] h-[72px] shrink-0">
+        <div className="relative w-18 h-18 shrink-0">
           <svg width="72" height="72" viewBox="0 0 72 72" className="-rotate-90">
             <circle cx="36" cy="36" r={r} fill="none" className="stroke-white/5" strokeWidth="6" />
             <circle
@@ -60,7 +60,7 @@ const ScoreRing = ({ score }: { score: number }) => {
 
 // Стан збору даних
 const CollectingCard = ({ count, message }: { count: number; message: string }) => (
-    <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-5 flex flex-col gap-4 shadow-xl font-sans">
+    <div className="bg-linear-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-5 flex flex-col gap-4 shadow-xl font-sans">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -71,7 +71,7 @@ const CollectingCard = ({ count, message }: { count: number; message: string }) 
       <div className="flex flex-col gap-2">
         <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
           <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700 ease-out"
+              className="h-full rounded-full bg-linear-to-r from-emerald-600 to-emerald-400 transition-all duration-700 ease-out"
               style={{ width: `${Math.min((count / 3) * 100, 100)}%` }}
           />
         </div>
@@ -82,22 +82,40 @@ const CollectingCard = ({ count, message }: { count: number; message: string }) 
     </div>
 );
 
-// Головний компонент
+const CustomTooltip = ({ active, payload, label, chartColor }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+        <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl shadow-2xl flex flex-col gap-1 min-w-30 font-sans z-50">
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">{label}</span>
+          <div className="flex flex-col">
+          <span className="text-sm font-black" style={{ color: chartColor }}>
+            {data.price} ₴
+          </span>
+            {data.oldPrice && (
+                <span className="text-xs text-slate-500 line-through font-medium">
+              Без знижки: {data.oldPrice} ₴
+            </span>
+            )}
+          </div>
+        </div>
+    );
+  }
+  return null;
+};
+
+
 export const PriceChart = ({ data, honesty }: PriceChartProps) => {
-  // Використовуємо власне вимірювання ширини замість ResponsiveContainer
   const containerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(0);
 
   useEffect(() => {
     if (!containerRef.current) return;
-
-    // ResizeObserver безпечно працює всередині Shadow DOM
     const observer = new ResizeObserver((entries) => {
       for (let entry of entries) {
         setChartWidth(entry.contentRect.width);
       }
     });
-
     observer.observe(containerRef.current);
     return () => observer.disconnect();
   }, []);
@@ -128,10 +146,12 @@ export const PriceChart = ({ data, honesty }: PriceChartProps) => {
   }, {} as Record<string, any>);
 
   const chartData = Object.values(groupedByDay).sort((a: any, b: any) => a.timestamp - b.timestamp).slice(-14);
+
+  // Отримуємо кольори на основі оцінки
   const colors = scoreColor(honesty.score);
 
   return (
-      <div className="flex flex-col gap-3 bg-gradient-to-br from-slate-900/95 to-slate-800/95 rounded-2xl border border-white/5 p-4 shadow-xl font-sans">
+      <div className="flex flex-col gap-3 bg-linear-to-br from-slate-900/95 to-slate-800/95 rounded-2xl border border-white/5 p-4 shadow-xl font-sans">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">FairPrice</span>
@@ -144,20 +164,35 @@ export const PriceChart = ({ data, honesty }: PriceChartProps) => {
         </div>
 
         {/* Безпечний контейнер для графіка */}
-        <div className="w-full h-[180px] mt-2 relative" ref={containerRef}>
+        <div className="w-full h-45 mt-2 relative" ref={containerRef}>
           {chartWidth > 0 && (
               <AreaChart width={chartWidth} height={180} data={chartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradPrice" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#10b981" stopOpacity={0.3} />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                    {/* Використовуємо динамічний колір для градієнта */}
+                    <stop offset="0%" stopColor={colors.stroke} stopOpacity={0.4} />
+                    <stop offset="100%" stopColor={colors.stroke} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
                 <XAxis dataKey="dateStr" stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
                 <YAxis stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} width={40} />
-                <Tooltip isAnimationActive={false} contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', fontSize: '12px' }} itemStyle={{ color: '#10b981' }} />
-                <Area isAnimationActive={false} type="monotone" dataKey="price" stroke="#10b981" strokeWidth={2.5} fill="url(#gradPrice)" />
+
+                {/* Підключаємо наш новий кастомний тултип та передаємо йому поточний колір графіка */}
+                <Tooltip
+                    content={<CustomTooltip chartColor={colors.stroke} />}
+                    cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }}
+                />
+
+                {/* Використовуємо динамічний колір для самої лінії графіка */}
+                <Area
+                    isAnimationActive={false}
+                    type="monotone"
+                    dataKey="price"
+                    stroke={colors.stroke}
+                    strokeWidth={2.5}
+                    fill="url(#gradPrice)"
+                />
               </AreaChart>
           )}
         </div>
@@ -165,8 +200,8 @@ export const PriceChart = ({ data, honesty }: PriceChartProps) => {
         <div className="flex items-center justify-between border-t border-white/5 pt-3 mt-1">
           <div className="flex flex-col gap-1.5">
             <div className="flex items-center gap-2">
-              <div className="w-4 h-1 rounded-full bg-emerald-500" />
-              <span className="text-[10px] text-slate-400 font-medium">Ціна зі знижкою</span>
+              <div className={`w-4 h-1 rounded-full`} style={{ backgroundColor: colors.stroke }} />
+              <span className="text-[10px] text-slate-400 font-medium">Динаміка ціни</span>
             </div>
           </div>
           {honesty.score !== -1 && <ScoreRing score={honesty.score} />}

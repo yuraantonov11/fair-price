@@ -5,11 +5,10 @@ export default defineBackground(() => {
   console.log('[FairPrice] Background Service Worker запущено.');
 
   browser.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
-    // Чітка маршрутизація подій
     switch (message.type) {
       case 'SAVE_PRODUCT':
         handleSaveProduct(message as SaveProductMessage).then(sendResponse);
-        return true; // Вказує браузеру чекати на асинхронну відповідь
+        return true;
 
       case 'GET_HISTORY':
         handleGetHistory(message as GetHistoryMessage).then(sendResponse);
@@ -17,13 +16,37 @@ export default defineBackground(() => {
 
       case 'SET_ICON':
         handleSetIcon(message as SetIconMessage, sender).then(sendResponse);
-        return false; // Відповідь не потрібна, відпрацьовує синхронно
+        return true;
+
+      case 'SEND_FEEDBACK':
+        handleSendFeedback(message).then(sendResponse);
+        return true;
 
       default:
         console.warn('[FairPrice] Невідомий тип повідомлення:', message.type);
         return false;
     }
   });
+
+  async function handleSendFeedback(msg: any) {
+    try {
+      const { type, url, comment } = msg.payload;
+      const { error } = await supabase
+          .from('user_requests')
+          .insert([{
+            type,
+            url,
+            comment,
+            created_at: new Date().toISOString()
+          }]);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (error: any) {
+      console.error('[FairPrice] Помилка відправки фідбеку:', error);
+      return { success: false, error: error.message };
+    }
+  }
 
   async function handleSaveProduct(msg: SaveProductMessage) {
     try {
@@ -66,7 +89,6 @@ export default defineBackground(() => {
 
       if (error) throw error;
 
-      // Конвертуємо копійки у гривні для графіка
       const mappedData = data.map((item: any) => ({
         price: item.price / 100,
         oldPrice: item.regular_price ? item.regular_price / 100 : null,
@@ -87,9 +109,13 @@ export default defineBackground(() => {
 
     if (tabId) {
       try {
+        // Передаємо об'єкт розмірів без початкового слеша для кросбраузерності
         await browser.action.setIcon({
-          // Важливо: переконайся, що іконки лежать у папці public/icons/
-          path: `/icons/icon_${status}.png`,
+          path: {
+            "16": `icons/icon_${status}.png`,
+            "48": `icons/icon_${status}.png`,
+            "128": `icons/icon_${status}.png`
+          },
           tabId: tabId
         });
       } catch (err) {

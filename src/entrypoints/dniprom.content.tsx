@@ -8,6 +8,10 @@ export default defineContentScript({
 
   main() {
     console.log('[FairPrice: LEVEL 0] 🚀 Скрипт завантажено для Dnipro-M');
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame = window.requestAnimationFrame.bind(window);
+      window.cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
+    }
 
     const adapter = new DniproMAdapter();
 

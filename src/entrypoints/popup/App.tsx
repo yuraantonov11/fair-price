@@ -1,66 +1,85 @@
-import React, { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 
-const App: React.FC = () => {
-    const [currentUrl, setCurrentUrl] = useState<string>('');
-    const [isSupported, setIsSupported] = useState<boolean>(false);
+export default function App() {
+    const [activeTab, setActiveTab] = useState<'status' | 'feedback'>('status');
+    const [currentUrl, setCurrentUrl] = useState('');
+    const [suggestion, setSuggestion] = useState('');
+    const [isSent, setIsSent] = useState(false);
 
     useEffect(() => {
-        // Отримуємо URL поточної активної вкладки
-        if (typeof browser !== 'undefined' && browser.tabs) {
-            browser.tabs.query({ active: true, currentWindow: true }).then((tabs) => {
-                const url = tabs[0]?.url || '';
-                setCurrentUrl(url);
-                setIsSupported(url.includes('rozetka.com.ua') || url.includes('dnipro-m.ua'));
-            });
-        }
+        browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
+            setCurrentUrl(tabs[0].url || '');
+        });
     }, []);
 
+    const sendFeedback = async (type: 'suggestion' | 'bug') => {
+        // Виклик вашого Background скрипта для збереження в Supabase
+        await browser.runtime.sendMessage({
+            type: 'SEND_FEEDBACK',
+            payload: { type, url: currentUrl, comment: suggestion }
+        });
+        setIsSent(true);
+        setSuggestion('');
+    };
+
     return (
-        <div className="w-80 p-5 bg-slate-900 text-slate-200 font-sans border border-slate-700 shadow-2xl">
-            {/* Шапка */}
-            <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center border border-emerald-500/30">
-                    <span className="text-xl">🕵️‍♂️</span>
-                </div>
-                <div>
-                    <h1 className="text-lg font-black text-white leading-tight">Чесна Ціна</h1>
-                    <p className="text-[10px] uppercase tracking-widest text-emerald-400 font-bold">Fair Price Tracker</p>
+        <div className="w-[350px] bg-slate-900 text-white font-sans overflow-hidden shadow-2xl border border-white/10">
+            {/* Header */}
+            <div className="p-4 bg-gradient-to-r from-green-600 to-emerald-700 flex justify-between items-center">
+                <h1 className="font-black text-lg tracking-tight">FAIR PRICE</h1>
+                <div className="flex gap-2">
+                    <button onClick={() => setActiveTab('status')} className={`text-xs px-2 py-1 rounded ${activeTab === 'status' ? 'bg-white/20' : ''}`}>Статус</button>
+                    <button onClick={() => setActiveTab('feedback')} className={`text-xs px-2 py-1 rounded ${activeTab === 'feedback' ? 'bg-white/20' : ''}`}>Допомога</button>
                 </div>
             </div>
 
-            {/* Блок статусу */}
-            <div className="bg-slate-800 rounded-xl p-4 border border-slate-700/50">
-                {isSupported ? (
-                    <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2 text-emerald-400">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path></svg>
-                            <span className="text-sm font-bold">Сайт підтримується</span>
+            <div className="p-4 min-h-[200px]">
+                {activeTab === 'status' ? (
+                    <div className="space-y-4">
+                        <div className="p-3 bg-white/5 rounded-xl border border-white/5">
+                            <p className="text-slate-400 text-[10px] uppercase font-bold">Поточний сайт</p>
+                            <p className="text-sm truncate font-medium text-emerald-400">{new URL(currentUrl || 'about:blank').hostname}</p>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                            Відкрийте сторінку будь-якого товару, і ми автоматично покажемо графік історії цін та перевіримо чесність знижки просто на сторінці.
-                        </p>
+                        {/* Тут можна додати коротку статистику: "Знайдено 12 цін" або "Сайт не підтримується" */}
+                        {!currentUrl.includes('rozetka') && !currentUrl.includes('dnipro-m') && (
+                            <div className="text-center py-4">
+                                <p className="text-xs text-slate-400 mb-3">Ми ще не моніторимо цей магазин</p>
+                                <button onClick={() => setActiveTab('feedback')} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 px-4 rounded-lg transition-all">
+                                    Запропонувати цей сайт
+                                </button>
+                            </div>
+                        )}
                     </div>
                 ) : (
-                    <div className="flex flex-col gap-2">
-                        <div className="flex items-center gap-2 text-amber-400">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                            <span className="text-sm font-bold">Сайт не підтримується</span>
-                        </div>
-                        <p className="text-xs text-slate-400 leading-relaxed">
-                            Розширення наразі працює на <b>Rozetka</b> та <b>Dnipro-M</b>. Перейдіть на один із цих магазинів для аналізу цін.
-                        </p>
+                    <div className="space-y-3">
+                        {isSent ? (
+                            <div className="text-center py-8">
+                                <p className="text-emerald-400 font-bold">Дякуємо! 🚀</p>
+                                <p className="text-xs text-slate-400 mt-2">Ваш запит прийнято в роботу.</p>
+                                <button onClick={() => setIsSent(false)} className="mt-4 text-xs underline">Надіслати ще</button>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-xs text-slate-400">Помітили помилку або хочете додати новий магазин?</p>
+                                <textarea
+                                    className="w-full bg-slate-800 border border-white/10 rounded-lg p-2 text-xs h-24 focus:border-emerald-500 outline-none"
+                                    placeholder="Опишіть проблему або вкажіть назву магазину..."
+                                    value={suggestion}
+                                    onChange={(e) => setSuggestion(e.target.value)}
+                                />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button onClick={() => sendFeedback('bug')} className="bg-red-500/20 hover:bg-red-500/30 text-red-400 text-[10px] font-bold py-2 rounded-lg border border-red-500/20">
+                                        ПОВІДОМИТИ ПРО БАГ
+                                    </button>
+                                    <button onClick={() => sendFeedback('suggestion')} className="bg-emerald-500 hover:bg-emerald-400 text-slate-900 text-[10px] font-bold py-2 rounded-lg">
+                                        ДОДАТИ САЙТ
+                                    </button>
+                                </div>
+                            </>
+                        )}
                     </div>
                 )}
             </div>
-
-            {/* Футер */}
-            <div className="mt-4 pt-3 border-t border-slate-700/50 text-center">
-                <p className="text-[10px] text-slate-500">
-                    Розроблено для захисту від маніпулятивних знижок.
-                </p>
-            </div>
         </div>
     );
-};
-
-export default App;
+}

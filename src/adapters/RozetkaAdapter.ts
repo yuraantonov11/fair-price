@@ -7,8 +7,13 @@ export class RozetkaAdapter implements IPriceAdapter {
   isApplicable(): boolean { return window.location.hostname.includes('rozetka.com.ua'); }
   isProductPage(): boolean { return window.location.pathname.includes('/p'); }
   isCatalogPage(): boolean { return !this.isProductPage() && document.querySelector('.catalog-list, .products-list') !== null; }
-  getUIAnchor(): Element | null { return document.querySelector('.product-about__right'); }
-  getUIInsertMethod(): ContentScriptAppendMode { return 'after'; }
+  getUIAnchor(): Element | null {
+    return document.querySelector('.product-trade') || document.querySelector('.product-about__right');
+  }
+
+  getUIInsertMethod(): ContentScriptAppendMode {
+    return 'after';
+  }
 
   // Заділ на майбутнє: парсинг стану SSR Розетки
   getHydrationData(): any | null {
@@ -35,38 +40,59 @@ export class RozetkaAdapter implements IPriceAdapter {
     return buyButton ? !buyButton.hasAttribute('disabled') : false;
   }
 
-  async parseProductPage(): Promise<ProductData | null> {
-    try {
-      // Чекаємо саме на ціну, оскільки це SPA
-      await waitForElement('.product-price__big');
+  async parseProductPage() {
+    const jsonLd = document.querySelector('script[type="application/ld+json"]');
+    if (jsonLd) {
+      try {
+        const data = JSON.parse(jsonLd.innerHTML);
+        // У Розетки це зазвичай масив, шукаємо об'єкт Product
+        const product = Array.isArray(data) ? data.find(i => i['@type'] === 'Product') : data;
 
-      const currentPrice = this.getCurrentPrice();
-      if (!currentPrice) {
-        console.error('[FairPrice] ❌ Не вдалося знайти валідну ціну на сторінці Rozetka.');
-        return null;
-      }
-
-      const titleEl = document.querySelector('.product__title');
-      const sku = this.getProductID() || 'unknown';
-      const cleanUrl = window.location.origin + window.location.pathname;
-
-      console.log(`[FairPrice] ✅ Знайдено: ${currentPrice} UAH (SKU: ${sku})`);
-
-      return {
-        externalId: sku,
-        name: titleEl?.textContent?.trim() || 'Невідомий товар Rozetka',
-        url: cleanUrl,
-        price: Math.round(currentPrice * 100),
-        regularPrice: this.getOriginalPrice() ? Math.round(this.getOriginalPrice()! * 100) : null,
-        promoName: null,
-        isAvailable: this.getStockStatus(),
-        hydrationData: this.getHydrationData()
-      };
-    } catch (error) {
-      console.warn('[FairPrice] RozetkaAdapter: Не вдалося розпарсити дані', error);
-      return null;
+        if (product) {
+          return {
+            name: product.name,
+            price: product.offers?.price * 100, // в копійках
+            url: window.location.href,
+            externalId: product.sku || product.productID
+          };
+        }
+      } catch (e) { console.error("JSON-LD parse error", e); }
     }
+    // Якщо JSON-LD немає, тоді вже fallback на CSS-селектори
   }
+
+  // async parseProductPage(): Promise<ProductData | null> {
+  //   try {
+  //     // Чекаємо саме на ціну, оскільки це SPA
+  //     await waitForElement('.product-price__big');
+  //
+  //     const currentPrice = this.getCurrentPrice();
+  //     if (!currentPrice) {
+  //       console.error('[FairPrice] ❌ Не вдалося знайти валідну ціну на сторінці Rozetka.');
+  //       return null;
+  //     }
+  //
+  //     const titleEl = document.querySelector('.product__title');
+  //     const sku = this.getProductID() || 'unknown';
+  //     const cleanUrl = window.location.origin + window.location.pathname;
+  //
+  //     console.log(`[FairPrice] ✅ Знайдено: ${currentPrice} UAH (SKU: ${sku})`);
+  //
+  //     return {
+  //       externalId: sku,
+  //       name: titleEl?.textContent?.trim() || 'Невідомий товар Rozetka',
+  //       url: cleanUrl,
+  //       price: Math.round(currentPrice * 100),
+  //       regularPrice: this.getOriginalPrice() ? Math.round(this.getOriginalPrice()! * 100) : null,
+  //       promoName: null,
+  //       isAvailable: this.getStockStatus(),
+  //       hydrationData: this.getHydrationData()
+  //     };
+  //   } catch (error) {
+  //     console.warn('[FairPrice] RozetkaAdapter: Не вдалося розпарсити дані', error);
+  //     return null;
+  //   }
+  // }
 
   async parseCatalogPage(): Promise<ProductData[]> {
     return [];
