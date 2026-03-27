@@ -2,11 +2,12 @@ export interface ProductData {
   externalId: string;
   name: string;
   url: string;
-  price: number;        // Ціна в копійках
+  price: number;
   regularPrice: number | null;
-  promoName?: string | null;
+  promoName: string | null;
   isAvailable: boolean;
-  hydrationData?: any;  // Дані з Next.js/React
+  hydrationData: any | null;
+  category?: string;
 }
 
 export interface IPriceAdapter {

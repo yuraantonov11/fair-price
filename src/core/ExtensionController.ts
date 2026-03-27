@@ -131,12 +131,10 @@ export class ExtensionController {
             }
             // ==========================================
 
-            const volatility = this.adapter.getStoreDomain() === 'dnipro-m.ua' ? 0.08 : 0.15;
-
             const honestyResult = HonestyCalculator.calculate(
                 productData.price / 100,
                 mappedHistory,
-                volatility
+                productData.category
             );
 
             const iconStatus = honestyResult.score === -1 ? 'inactive' : (honestyResult.score < 40 ? 'error' : 'success');
