@@ -1,0 +1,31 @@
+name: Crawl Prices
+
+on:
+  schedule:
+    - cron: '0 3 * * *'   # щодня о 03:00 UTC (05:00 Київ)
+  workflow_dispatch:        # ручний запуск через GitHub UI
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Invoke crawl-prices Edge Function
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://mdqcjgxpvvknpehuqrhl.supabase.co/functions/v1/crawl-prices" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+
+          echo "Response: $BODY"
+          echo "Status: $HTTP_CODE"
+
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Crawl failed with status $HTTP_CODE"
+            exit 1
+          fi
+

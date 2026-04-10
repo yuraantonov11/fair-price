@@ -89,6 +89,7 @@ export class ExtensionController {
             if (!saveResponse?.success) {
                 this.logger.warn('SAVE_PRODUCT failed, continue with local analysis', {
                     error: saveResponse?.error || 'unknown error',
+                    code: saveResponse?.code || 'UNKNOWN',
                     productUrl: productData.url,
                     externalId: productData.externalId,
                 });
@@ -102,6 +103,7 @@ export class ExtensionController {
             if (!historyResponse?.success) {
                 this.logger.warn('GET_HISTORY failed, fallback to empty history', {
                     error: historyResponse?.error || 'unknown error',
+                    code: historyResponse?.code || 'UNKNOWN',
                     productUrl: productData.url,
                 });
             }

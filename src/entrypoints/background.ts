@@ -3,9 +3,59 @@ import { SaveProductMessage, GetHistoryMessage, SetIconMessage } from '@/types/m
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('background', { runtime: 'background' });
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  if (typeof error === 'string') return error;
+  return 'Unknown error';
+}
+
+function validateSupabaseConfig() {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    return { ok: false as const, error: 'Supabase env vars are missing (VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY)' };
+  }
+
+  try {
+    const url = new URL(SUPABASE_URL);
+    return { ok: true as const, host: url.host };
+  } catch {
+    return { ok: false as const, error: 'VITE_SUPABASE_URL has invalid format' };
+  }
+}
 
 export default defineBackground(() => {
   logger.info('Service worker started');
+
+  // Quick connectivity probe helps distinguish config/network issues from DB-level errors.
+  void (async () => {
+    const config = validateSupabaseConfig();
+    if (!config.ok) {
+      logger.error('Supabase config validation failed', { reason: config.error });
+      return;
+    }
+
+    try {
+      const probeUrl = `${SUPABASE_URL}/rest/v1/`;
+      const response = await fetch(probeUrl, {
+        method: 'GET',
+        headers: {
+          apikey: SUPABASE_ANON_KEY,
+        },
+      });
+
+      logger.info('Supabase connectivity probe completed', {
+        host: config.host,
+        status: response.status,
+      });
+    } catch (error) {
+      logger.error('Supabase connectivity probe failed', {
+        host: config.host,
+        error: getErrorMessage(error),
+      });
+    }
+  })();
 
   browser.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
     switch (message.type) {
@@ -33,6 +83,9 @@ export default defineBackground(() => {
 
   async function handleSendFeedback(msg: any) {
     try {
+      const config = validateSupabaseConfig();
+      if (!config.ok) return { success: false, error: config.error, code: 'SUPABASE_CONFIG_ERROR' };
+
       const { type, url, comment } = msg.payload;
       const { error } = await supabase
           .from('user_requests')
@@ -47,12 +100,15 @@ export default defineBackground(() => {
       return { success: true };
     } catch (error: any) {
       logger.error('Failed to send feedback', { error, messageType: msg?.payload?.type, url: msg?.payload?.url });
-      return { success: false, error: error.message };
+      return { success: false, error: getErrorMessage(error), code: 'SUPABASE_FEEDBACK_FAILED' };
     }
   }
 
   async function handleSaveProduct(msg: SaveProductMessage) {
     try {
+      const config = validateSupabaseConfig();
+      if (!config.ok) return { success: false, error: config.error, code: 'SUPABASE_CONFIG_ERROR' };
+
       const { payload } = msg;
       const urlObj = new URL(payload.url);
       const storeDomain = urlObj.hostname.replace(/^www\./, '');
@@ -72,12 +128,15 @@ export default defineBackground(() => {
       return { success: true };
     } catch (error: any) {
       logger.error('Failed to save product', { error, url: msg?.payload?.url, externalId: msg?.payload?.externalId });
-      return { success: false, error: error.message };
+      return { success: false, error: getErrorMessage(error), code: 'SUPABASE_SAVE_FAILED' };
     }
   }
 
   async function handleGetHistory(msg: GetHistoryMessage) {
     try {
+      const config = validateSupabaseConfig();
+      if (!config.ok) return { success: false, error: config.error, code: 'SUPABASE_CONFIG_ERROR', data: [] };
+
       const { data, error } = await supabase
           .from('price_history')
           .select(`
@@ -102,7 +161,7 @@ export default defineBackground(() => {
       return { success: true, data: mappedData };
     } catch (error: any) {
       logger.error('Failed to fetch history', { error, url: msg?.payload?.url });
-      return { success: false, error: error.message, data: [] };
+      return { success: false, error: getErrorMessage(error), code: 'SUPABASE_HISTORY_FAILED', data: [] };
     }
   }
 

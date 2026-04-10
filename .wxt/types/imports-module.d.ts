@@ -20,5 +20,8 @@ declare module '#imports' {
   export { fakeBrowser } from 'wxt/testing';
   export { waitForElement, parsePrice, observeSPA } from '../src/utils/domUtils';
   export { HydrationParser, HydrationParser } from '../src/utils/hydrationParser';
+  export { createLogger } from '../src/utils/logger';
+  export { scrapeProductPage, ScrapedProduct } from '../src/utils/priceScraper';
+  export { parseSitemap, extractEntries, isDniproMProduct, SitemapEntry } from '../src/utils/sitemapParser';
   export { supabase } from '../src/utils/supabaseClient';
 }

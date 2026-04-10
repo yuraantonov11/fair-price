@@ -52,6 +52,7 @@
 - Dev для Firefox: `npm run dev:firefox`
 - Для VS Code/JetBrains Gateway додані запускні конфіги в `.vscode/launch.json` і задачі в `.vscode/tasks.json`.
 - Логи уніфіковані форматом: `[FairPrice][<scope>][<LEVEL>] message {context}`.
+- Для Supabase дивіться `code` у логу (`SUPABASE_CONFIG_ERROR`, `SUPABASE_SAVE_FAILED`, `SUPABASE_HISTORY_FAILED`) і стартовий probe в background.
 
 ### Тестування
 
@@ -97,6 +98,29 @@
 3. Увімкніть "Developer mode" (Режим розробника).
 4. Натисніть "Load unpacked" (Завантажити розпаковане).
 5. Виберіть папку `.output/chrome-mv3` (або відповідну для вашого браузера).
+
+### Серверний краулер цін
+
+Автоматично обходить весь каталог Dnipro-M (2500+ товарів) і заповнює базу
+даними без участі юзера.
+
+- Edge Function: `supabase/functions/crawl-prices/index.ts`
+- Детальна інструкція: [`docs/crawl-prices.md`](docs/crawl-prices.md)
+- SQL-схема бази: `supabase/migrations/20260410_init.sql`
+- Cron workflow: `.github/workflows/crawl.yml`
+
+Швидкий старт:
+
+```powershell
+# 1. Деплой функції
+supabase functions deploy crawl-prices
+
+# 2. Встановити Service Role Key (беретcя з Supabase Dashboard → Settings → API)
+supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<key>
+
+# 3. Тестовий запуск
+supabase functions invoke crawl-prices --body '{}'
+```
 
 ## Додавання нових магазинів
 
