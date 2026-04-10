@@ -1,6 +1,9 @@
 import { IPriceAdapter, ProductData } from './IPriceAdapter';
 import { parsePrice, waitForElement } from '@/utils/domUtils';
 import { HydrationParser } from '@/utils/hydrationParser';
+import { createLogger } from '@/utils/logger';
+
+const logger = createLogger('DniproMAdapter', { runtime: 'content', store: 'dnipro-m.ua' });
 
 export class DniproMAdapter implements IPriceAdapter {
   getStoreDomain(): string { return 'dnipro-m.ua'; }
@@ -59,7 +62,7 @@ export class DniproMAdapter implements IPriceAdapter {
         hydrationData: this.getHydrationData()
       };
     } catch (error) {
-      console.error('[FairPrice] Помилка:', error);
+      logger.error('Failed to parse Dnipro-M product page', { error, url: window.location.href });
       return null;
     }
   }

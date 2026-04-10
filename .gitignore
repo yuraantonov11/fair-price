@@ -5,3 +5,8 @@ dist/
 build/
 .output/
 /docs/repomix.md
+.env
+.env.local
+.env.*.local
+playwright-report/
+test-results/

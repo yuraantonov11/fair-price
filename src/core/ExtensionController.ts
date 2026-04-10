@@ -1,6 +1,7 @@
 import { IPriceAdapter } from '@/adapters/IPriceAdapter';
 import { HonestyCalculator } from './HonestyCalculator';
 import { MessageRouter } from "@/core/MessageRouter";
+import { createLogger } from '@/utils/logger';
 
 export class ExtensionController {
     private adapter: IPriceAdapter;
@@ -12,6 +13,7 @@ export class ExtensionController {
     private cachedHistory: any[] | null = null;
     private cachedHonestyScore: { score: number; message: string } | null = null;
     private isProcessing = false;
+    private logger;
 
     constructor(
         adapter: IPriceAdapter,
@@ -19,10 +21,16 @@ export class ExtensionController {
     ) {
         this.adapter = adapter;
         this.currentUrl = window.location.href;
+        const traceId = Math.random().toString(36).slice(2, 10);
+        this.logger = createLogger('ExtensionController', {
+            runtime: 'content',
+            store: this.adapter.getStoreDomain(),
+            traceId,
+        });
     }
 
     public init() {
-        console.log(`[FairPrice] Ініціалізація для ${this.adapter.getStoreDomain()}`);
+        this.logger.info('Controller initialized', { url: this.currentUrl });
         this.processPage();
 
         // Надійний обсервер для SPA-додатків
@@ -31,7 +39,7 @@ export class ExtensionController {
             if (url !== this.currentUrl) {
                 // Сценарій 1: Користувач перейшов на іншу сторінку
                 this.currentUrl = url;
-                console.log('[FairPrice] Виявлено SPA навігацію. Перезапуск...');
+                this.logger.info('Detected SPA navigation, restarting page processing', { url });
                 this.cleanup();
                 setTimeout(() => this.processPage(), 500);
             } else if (this.adapter.isProductPage() && this.cachedHistory && this.cachedHonestyScore && !this.isProcessing) {
@@ -40,7 +48,7 @@ export class ExtensionController {
                     const anchor = this.adapter.getUIAnchor();
                     // Відновлюємо тільки якщо якір існує (сторінка не перезавантажується повністю)
                     if (anchor) {
-                        console.log('[FairPrice] Angular/SPA видалив графік. Відновлюємо з кешу...');
+                        this.logger.info('UI mount was removed by page framework, restoring from cache');
                         this.mountPoint = null; // Скидаємо посилання на старий, видалений елемент
                         this.injectUI(this.cachedHistory, this.cachedHonestyScore);
                     }
@@ -77,16 +85,29 @@ export class ExtensionController {
                 return;
             }
 
-            await MessageRouter.send({ type: 'SAVE_PRODUCT', payload: productData });
+            const saveResponse = await MessageRouter.send({ type: 'SAVE_PRODUCT', payload: productData });
+            if (!saveResponse?.success) {
+                this.logger.warn('SAVE_PRODUCT failed, continue with local analysis', {
+                    error: saveResponse?.error || 'unknown error',
+                    productUrl: productData.url,
+                    externalId: productData.externalId,
+                });
+            }
 
             const historyResponse = await MessageRouter.send({
                 type: 'GET_HISTORY',
                 payload: { url: productData.url }
             });
 
-            if (!historyResponse.success) throw new Error('Failed to fetch history');
+            if (!historyResponse?.success) {
+                this.logger.warn('GET_HISTORY failed, fallback to empty history', {
+                    error: historyResponse?.error || 'unknown error',
+                    productUrl: productData.url,
+                });
+            }
 
-            let mappedHistory = historyResponse.data.map((item: any) => ({
+            const historyData = Array.isArray(historyResponse?.data) ? historyResponse.data : [];
+            let mappedHistory = historyData.map((item: any) => ({
                 price: item.price,
                 oldPrice: item.oldPrice,
                 promoName: item.promoName,
@@ -147,7 +168,7 @@ export class ExtensionController {
             await this.injectUI(mappedHistory, honestyResult);
 
         } catch (error) {
-            console.error('[FairPrice] ❌ Помилка обробки сторінки:', error);
+            this.logger.error('Page processing failed', { error, url: this.currentUrl });
         } finally {
             this.isProcessing = false;
         }

@@ -1,13 +1,15 @@
-console.error('[FairPrice: BOOT] ⬛ 1. Файл dniprom.content.tsx фізично прочитано браузером!');
 import { DniproMAdapter } from '@/adapters/DniproMAdapter';
 import { ExtensionController } from '@/core/ExtensionController';
 import { injectUI } from '@/ui/injector';
+import { createLogger } from '@/utils/logger';
+
+const logger = createLogger('dniprom.content', { runtime: 'content', store: 'dnipro-m.ua' });
 
 export default defineContentScript({
   matches: ['*://dnipro-m.ua/*', '*://*.dnipro-m.ua/*'],
 
   main() {
-    console.log('[FairPrice: LEVEL 0] 🚀 Скрипт завантажено для Dnipro-M');
+    logger.info('Content script loaded');
     if (typeof window !== 'undefined') {
       window.requestAnimationFrame = window.requestAnimationFrame.bind(window);
       window.cancelAnimationFrame = window.cancelAnimationFrame.bind(window);
@@ -21,6 +23,7 @@ export default defineContentScript({
     };
 
     const controller = new ExtensionController(adapter, renderReactUI);
+    logger.debug('Starting extension controller');
     controller.init();
   },
 });

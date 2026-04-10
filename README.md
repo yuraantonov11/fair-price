@@ -34,6 +34,55 @@
 
     *Якщо браузер не відкрився автоматично, перевірте консоль на наявність помилок.*
 
+### Налаштування середовища
+
+1. Скопіюйте змінні оточення з шаблону:
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+2. Заповніть `VITE_SUPABASE_URL` та `VITE_SUPABASE_ANON_KEY`.
+   - Домен Supabase уже дозволений у `host_permissions` (`*://*.supabase.co/*`).
+3. Для Firefox (опційно) задайте `WXT_FIREFOX_BINARY`, якщо шлях відрізняється від дефолтного в `wxt.config.ts`.
+4. За потреби змініть `WXT_START_URL` (за замовчуванням відкривається сторінка Dnipro-M товару при `npm run dev`).
+5. Для керування шумом логів задайте `VITE_LOG_LEVEL` (`debug` | `info` | `warn` | `error` | `silent`).
+
+### Дебаг
+
+- Dev для Chrome: `npm run dev`
+- Dev для Firefox: `npm run dev:firefox`
+- Для VS Code/JetBrains Gateway додані запускні конфіги в `.vscode/launch.json` і задачі в `.vscode/tasks.json`.
+- Логи уніфіковані форматом: `[FairPrice][<scope>][<LEVEL>] message {context}`.
+
+### Тестування
+
+- Unit-тести (Vitest):
+  ```bash
+  npm run test
+  ```
+- Перевірка, що в коді немає `console.*` поза `src/utils/logger.ts`:
+  ```bash
+  npm run check:logs
+  ```
+- Watch-режим unit-тестів:
+  ```bash
+  npm run test:watch
+  ```
+- E2E (Playwright):
+  ```bash
+  npm run test:e2e:install
+  npm run test:e2e
+  ```
+
+### CI / деплой артефактів
+
+- Workflow: `.github/workflows/ci.yml`
+- Release workflow: `.github/workflows/release.yml` (запуск по тегу `v*`)
+- CI запускає:
+  - `npm run ci:check` (typecheck + unit tests)
+  - `npm run ci:build` (build + zip для Chrome/Firefox)
+- Після виконання workflow артефакти доступні як `extension-output`.
+- `release.yml` публікує `.output/**/*.zip` у GitHub Release.
+
 3.  **Збірка для публікації**:
     ```bash
     npm run build

@@ -10,6 +10,15 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
+    "typecheck": "tsc --noEmit",
+    "check:logs": "node scripts/check-logs.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:install": "playwright install chromium",
+    "ci:check": "npm run typecheck && npm run test && npm run check:logs",
+    "ci:build": "npm run build && npm run build:firefox && npm run zip && npm run zip:firefox",
     "repomix": "npx repomix --ignore node_modules,docs,dev,.wxt,.idea,.ai,.output --style markdown -o docs/repomix.md"
   },
   "dependencies": {
@@ -20,6 +29,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@playwright/test": "^1.55.1",
     "@tailwindcss/vite": "^4.2.2",
     "@types/chrome": "^0.1.38",
     "@types/react-dom": "^19.2.3",
@@ -27,6 +37,7 @@
     "repomix": "^1.13.0",
     "tailwindcss": "^4.2.2",
     "typescript": "^6.0.2",
+    "vitest": "^3.2.4",
     "wxt": "^0.20.20"
   }
 }

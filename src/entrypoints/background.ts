@@ -1,8 +1,11 @@
 import { supabase } from '@/utils/supabaseClient';
 import { SaveProductMessage, GetHistoryMessage, SetIconMessage } from '@/types/messages';
+import { createLogger } from '@/utils/logger';
+
+const logger = createLogger('background', { runtime: 'background' });
 
 export default defineBackground(() => {
-  console.log('[FairPrice] Background Service Worker запущено.');
+  logger.info('Service worker started');
 
   browser.runtime.onMessage.addListener((message: any, sender, sendResponse) => {
     switch (message.type) {
@@ -23,7 +26,7 @@ export default defineBackground(() => {
         return true;
 
       default:
-        console.warn('[FairPrice] Невідомий тип повідомлення:', message.type);
+        logger.warn('Unknown message type', { messageType: message.type });
         return false;
     }
   });
@@ -43,7 +46,7 @@ export default defineBackground(() => {
       if (error) throw error;
       return { success: true };
     } catch (error: any) {
-      console.error('[FairPrice] Помилка відправки фідбеку:', error);
+      logger.error('Failed to send feedback', { error, messageType: msg?.payload?.type, url: msg?.payload?.url });
       return { success: false, error: error.message };
     }
   }
@@ -68,7 +71,7 @@ export default defineBackground(() => {
       if (error) throw error;
       return { success: true };
     } catch (error: any) {
-      console.error('[FairPrice] Помилка збереження:', error);
+      logger.error('Failed to save product', { error, url: msg?.payload?.url, externalId: msg?.payload?.externalId });
       return { success: false, error: error.message };
     }
   }
@@ -98,7 +101,7 @@ export default defineBackground(() => {
 
       return { success: true, data: mappedData };
     } catch (error: any) {
-      console.error('[FairPrice] Помилка отримання історії:', error);
+      logger.error('Failed to fetch history', { error, url: msg?.payload?.url });
       return { success: false, error: error.message, data: [] };
     }
   }
@@ -119,7 +122,7 @@ export default defineBackground(() => {
           tabId: tabId
         });
       } catch (err) {
-        console.error('[FairPrice] Помилка встановлення іконки', err);
+        logger.error('Failed to set icon', { error: err, tabId, status });
       }
     }
     return { success: true };

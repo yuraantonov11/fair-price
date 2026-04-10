@@ -1,6 +1,9 @@
 import { defineConfig } from 'wxt';
 import tailwindcss from '@tailwindcss/vite';
 
+const firefoxBinaryPath = process.env.WXT_FIREFOX_BINARY || 'C:/Program Files/Firefox Developer Edition/firefox.exe';
+const devStartUrl = process.env.WXT_START_URL || 'https://dnipro-m.ua/tovar/akumulyatorna-lancyugova-pila-dms-201bc/';
+
 export default defineConfig({
   srcDir: 'src',
   modules: ['@wxt-dev/module-react'],
@@ -35,7 +38,8 @@ export default defineConfig({
     ],
     host_permissions: [
       "*://dnipro-m.ua/*",
-      "*://rozetka.com.ua/*"
+      "*://rozetka.com.ua/*",
+      "*://*.supabase.co/*"
     ],
     browser_specific_settings: {
       gecko: {
@@ -45,8 +49,9 @@ export default defineConfig({
     }
   },
   webExt: {
+    startUrls: [devStartUrl],
     binaries: {
-      firefox: 'C:/Program Files/Firefox Developer Edition/firefox.exe'
+      firefox: firefoxBinaryPath
     }
   }
 });

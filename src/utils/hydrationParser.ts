@@ -1,3 +1,7 @@
+import { createLogger } from '@/utils/logger';
+
+const logger = createLogger('HydrationParser', { runtime: 'content', store: 'dnipro-m.ua' });
+
 export class HydrationParser {
     static parseNextData(): any {
         const script = document.getElementById('__NEXT_DATA__');
@@ -7,7 +11,7 @@ export class HydrationParser {
                 // Шлях до даних у Dnipro-M зазвичай лежить у props.pageProps
                 return data?.props?.pageProps || null;
             } catch (e) {
-                console.error('[FairPrice] Помилка парсингу __NEXT_DATA__', e);
+                logger.warn('Failed to parse __NEXT_DATA__ payload', { error: e });
             }
         }
         return null;

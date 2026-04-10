@@ -1,6 +1,9 @@
 import { createRoot, Root } from 'react-dom/client';
 import { PriceChart } from './components/PriceChart';
 import tailwindStyles from '@/ui/styles.css?inline';
+import { createLogger } from '@/utils/logger';
+
+const logger = createLogger('injector', { runtime: 'content', area: 'ui' });
 
 let reactRoot: Root | null = null;
 let mountContainer: HTMLElement | null = null;
@@ -41,7 +44,7 @@ export async function injectUI(
         reactRoot.render(<PriceChart data={history} honesty={honesty} />);
 
     } catch (error) {
-        console.error('[FairPrice] ❌ Помилка інжекту UI:', error);
+        logger.error('UI injection failed', { error, targetId: targetContainer.id });
     }
 }
 

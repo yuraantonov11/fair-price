@@ -1,0 +1,30 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "FairPrice: Dev (Chrome)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev"
+    },
+    {
+      "name": "FairPrice: Dev (Firefox)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev:firefox"
+    },
+    {
+      "name": "FairPrice: Unit tests",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run test"
+    },
+    {
+      "name": "FairPrice: E2E tests",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run test:e2e"
+    }
+  ]
+}
+

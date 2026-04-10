@@ -1,6 +1,9 @@
 import { IPriceAdapter, ProductData } from './IPriceAdapter';
 import { waitForElement, parsePrice } from '@/utils/domUtils';
 import {ContentScriptAppendMode} from "wxt/utils/content-script-ui/types";
+import { createLogger } from '@/utils/logger';
+
+const logger = createLogger('RozetkaAdapter', { runtime: 'content', store: 'rozetka.com.ua' });
 
 export class RozetkaAdapter implements IPriceAdapter {
 
@@ -27,7 +30,7 @@ export class RozetkaAdapter implements IPriceAdapter {
         if (match) return JSON.parse(match[1]);
       }
     } catch (e) {
-      console.warn('[FairPrice] Помилка парсингу гідратаційних даних Розетки', e);
+      logger.warn('Failed to parse hydration data', { error: e });
     }
     return null;
   }
@@ -78,7 +81,9 @@ export class RozetkaAdapter implements IPriceAdapter {
             category: product.category || undefined
           };
         }
-      } catch (e) { console.error("[FairPrice] JSON-LD parse error", e); }
+      } catch (e) {
+        logger.warn('JSON-LD parse failed, fallback to DOM parsing', { error: e });
+      }
     }
 
     // 2. Fallback на CSS-селектори та доповнення відсутніх даних
@@ -87,7 +92,7 @@ export class RozetkaAdapter implements IPriceAdapter {
 
       const currentPriceUAH = this.getCurrentPrice();
       if (!currentPriceUAH && !productData.price) {
-        console.error('[FairPrice] ❌ Не вдалося знайти валідну ціну на сторінці Rozetka.');
+        logger.warn('Could not resolve valid price on page', { url: window.location.href });
         return null;
       }
 
@@ -99,7 +104,7 @@ export class RozetkaAdapter implements IPriceAdapter {
       const finalPrice = currentPriceUAH ? Math.round(currentPriceUAH * 100) : productData.price!;
       const originalPriceUAH = this.getOriginalPrice();
 
-      console.log(`[FairPrice] ✅ Знайдено: ${finalPrice / 100} UAH (SKU: ${sku})`);
+      logger.info('Parsed product successfully', { sku, priceUAH: finalPrice / 100 });
 
       return {
         externalId: sku,
@@ -113,7 +118,7 @@ export class RozetkaAdapter implements IPriceAdapter {
         category: productData.category || this.extractCategoryFromDOM() || 'Загальна' // Зберігаємо категорію
       };
     } catch (error) {
-      console.warn('[FairPrice] RozetkaAdapter: Не вдалося розпарсити дані сторінки', error);
+      logger.warn('Failed to parse page data', { error, url: window.location.href });
       return null;
     }
   }
