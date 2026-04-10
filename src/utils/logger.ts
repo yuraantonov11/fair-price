@@ -11,6 +11,11 @@ const LOG_PRIORITY: Record<LogLevel, number> = {
 };
 
 function readEnvVar(name: string): string | undefined {
+  // In Node.js / test environments process.env takes highest priority
+  // so that vi.stubEnv / direct assignment can override Vite-injected values.
+  const processEnv = (globalThis as unknown as { process?: { env?: Record<string, string> } }).process?.env;
+  if (processEnv?.[name]) return processEnv[name];
+
   try {
     const metaEnv = (import.meta as unknown as { env?: Record<string, string> }).env;
     if (metaEnv?.[name]) return metaEnv[name];
@@ -18,8 +23,7 @@ function readEnvVar(name: string): string | undefined {
     // ignore import.meta access outside Vite context
   }
 
-  const processEnv = (globalThis as unknown as { process?: { env?: Record<string, string> } }).process?.env;
-  return processEnv?.[name];
+  return undefined;
 }
 
 function isDevMode(): boolean {

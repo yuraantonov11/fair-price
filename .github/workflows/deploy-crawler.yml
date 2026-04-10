@@ -1,0 +1,42 @@
+name: Deploy Crawler
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'supabase/functions/crawl-prices/**'
+      - '.github/workflows/deploy-crawler.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy crawl-prices function
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+
+      - name: Link Supabase project
+        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+      - name: Deploy function
+        run: npx supabase functions deploy crawl-prices --no-verify-jwt
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Verify deployment
+        run: |
+          echo "✅ Function deployed successfully"
+          echo "To invoke manually:"
+          echo "npx supabase functions invoke crawl-prices --body '{}'"
+          echo ""
+          echo "To view logs:"
+          echo "npx supabase functions logs crawl-prices --tail"
+

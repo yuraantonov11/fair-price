@@ -1,0 +1,72 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Тригер на будь-якому тегу типу v1.0.0
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run checks
+        run: npm run ci:check
+
+      - name: Build extensions
+        run: npm run ci:build
+
+      - name: Get version from tag
+        id: tag_name
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            .output/zip/fair-price-chrome.zip
+            .output/zip/fair-price-firefox.zip
+          draft: false
+          prerelease: false
+          body: |
+            ## Fair Price ${{ steps.tag_name.outputs.VERSION }}
+
+            ### 📦 Downloads
+            - **Chrome**: fair-price-chrome.zip
+            - **Firefox**: fair-price-firefox.zip
+
+            ### 📝 Changes
+            See [CHANGELOG](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for details.
+
+            ### 📚 Documentation
+            - [Setup Guide](https://github.com/${{ github.repository }}/blob/main/docs/SETUP.md)
+            - [Developer Guide](https://github.com/${{ github.repository }}/blob/main/docs/DEVELOPMENT.md)
+            - [Architecture](https://github.com/${{ github.repository }}/blob/main/AGENTS.md)
+
+            ### ✨ Installation
+            1. Download the ZIP for your browser
+            2. Extract to a folder
+            3. Chrome: Go to `chrome://extensions/` → Enable Developer mode → Load unpacked
+            4. Firefox: Go to `about:addons` → Install from file
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: built-extensions
+          path: .output/zip/
+          retention-days: 7
+
