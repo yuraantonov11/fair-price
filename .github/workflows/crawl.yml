@@ -4,28 +4,50 @@ on:
   schedule:
     - cron: '0 3 * * *'   # щодня о 03:00 UTC (05:00 Київ)
   workflow_dispatch:        # ручний запуск через GitHub UI
+    inputs:
+      limit:
+        description: 'Optional URL limit for test runs (empty = all)'
+        required: false
+        type: string
 
 jobs:
   crawl:
     runs-on: ubuntu-latest
+    timeout-minutes: 180
 
     steps:
-      - name: Invoke crawl-prices Edge Function
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate required secrets
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "https://mdqcjgxpvvknpehuqrhl.supabase.co/functions/v1/crawl-prices" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{}')
-
-          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
-          BODY=$(echo "$RESPONSE" | head -n -1)
-
-          echo "Response: $BODY"
-          echo "Status: $HTTP_CODE"
-
-          if [ "$HTTP_CODE" != "200" ]; then
-            echo "Crawl failed with status $HTTP_CODE"
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Missing GitHub secret: SUPABASE_SERVICE_ROLE_KEY"
+            echo "Add it in: Settings -> Secrets and variables -> Actions"
             exit 1
+          fi
+
+      - name: Run crawler script
+        env:
+          SUPABASE_URL: https://mdqcjgxpvvknpehuqrhl.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.limit }}" ]; then
+            echo "Running test crawl with limit=${{ github.event.inputs.limit }}"
+            node scripts/crawl.mjs --limit "${{ github.event.inputs.limit }}"
+          else
+            echo "Running full crawl"
+            node scripts/crawl.mjs
           fi
 

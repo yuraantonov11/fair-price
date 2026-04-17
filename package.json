@@ -17,6 +17,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:install": "playwright install chromium",
+    "crawl": "node scripts/crawl.mjs",
+    "crawl:test": "node scripts/crawl.mjs --limit 20",
     "ci:check": "npm run typecheck && npm run test && npm run check:logs",
     "ci:build": "npm run build && npm run build:firefox && npm run zip && npm run zip:firefox",
     "repomix": "npx repomix --ignore node_modules,docs,dev,.wxt,.idea,.ai,.output --style markdown -o docs/repomix.md"
