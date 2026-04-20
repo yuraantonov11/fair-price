@@ -2,30 +2,30 @@
 export {}
 declare global {
   const ContentScriptContext: typeof import('wxt/utils/content-script-context').ContentScriptContext
-  const HydrationParser: typeof import('/home/runner/work/fair-price/fair-price/src/utils/hydrationParser').HydrationParser
+  const HydrationParser: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/hydrationParser').HydrationParser
   const InvalidMatchPattern: typeof import('wxt/utils/match-patterns').InvalidMatchPattern
   const MatchPattern: typeof import('wxt/utils/match-patterns').MatchPattern
   const browser: typeof import('wxt/browser').browser
   const createIframeUi: typeof import('wxt/utils/content-script-ui/iframe').createIframeUi
   const createIntegratedUi: typeof import('wxt/utils/content-script-ui/integrated').createIntegratedUi
-  const createLogger: typeof import('/home/runner/work/fair-price/fair-price/src/utils/logger').createLogger
+  const createLogger: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/logger').createLogger
   const createShadowRootUi: typeof import('wxt/utils/content-script-ui/shadow-root').createShadowRootUi
   const defineAppConfig: typeof import('wxt/utils/define-app-config').defineAppConfig
   const defineBackground: typeof import('wxt/utils/define-background').defineBackground
   const defineContentScript: typeof import('wxt/utils/define-content-script').defineContentScript
   const defineUnlistedScript: typeof import('wxt/utils/define-unlisted-script').defineUnlistedScript
   const defineWxtPlugin: typeof import('wxt/utils/define-wxt-plugin').defineWxtPlugin
-  const extractEntries: typeof import('/home/runner/work/fair-price/fair-price/src/utils/sitemapParser').extractEntries
+  const extractEntries: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/sitemapParser').extractEntries
   const fakeBrowser: typeof import('wxt/testing').fakeBrowser
   const getAppConfig: typeof import('wxt/utils/app-config').getAppConfig
   const injectScript: typeof import('wxt/utils/inject-script').injectScript
-  const isDniproMProduct: typeof import('/home/runner/work/fair-price/fair-price/src/utils/sitemapParser').isDniproMProduct
-  const observeSPA: typeof import('/home/runner/work/fair-price/fair-price/src/utils/domUtils').observeSPA
-  const parsePrice: typeof import('/home/runner/work/fair-price/fair-price/src/utils/domUtils').parsePrice
-  const parseSitemap: typeof import('/home/runner/work/fair-price/fair-price/src/utils/sitemapParser').parseSitemap
-  const scrapeProductPage: typeof import('/home/runner/work/fair-price/fair-price/src/utils/priceScraper').scrapeProductPage
+  const isDniproMProduct: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/sitemapParser').isDniproMProduct
+  const observeSPA: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/domUtils').observeSPA
+  const parsePrice: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/domUtils').parsePrice
+  const parseSitemap: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/sitemapParser').parseSitemap
+  const scrapeProductPage: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/priceScraper').scrapeProductPage
   const storage: typeof import('wxt/utils/storage').storage
-  const supabase: typeof import('/home/runner/work/fair-price/fair-price/src/utils/supabaseClient').supabase
+  const supabase: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/supabaseClient').supabase
   const useAppConfig: typeof import('wxt/utils/app-config').useAppConfig
   const useCallback: typeof import('react').useCallback
   const useContext: typeof import('react').useContext
@@ -34,7 +34,7 @@ declare global {
   const useReducer: typeof import('react').useReducer
   const useRef: typeof import('react').useRef
   const useState: typeof import('react').useState
-  const waitForElement: typeof import('/home/runner/work/fair-price/fair-price/src/utils/domUtils').waitForElement
+  const waitForElement: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/domUtils').waitForElement
 }
 // for type re-export
 declare global {
@@ -66,12 +66,12 @@ declare global {
   export type { ScriptPublicPath, InjectScriptOptions } from 'wxt/utils/inject-script'
   import('wxt/utils/inject-script')
   // @ts-ignore
-  export type { HydrationParser } from '/home/runner/work/fair-price/fair-price/src/utils/hydrationParser'
-  import('/home/runner/work/fair-price/fair-price/src/utils/hydrationParser')
+  export type { HydrationParser } from 'C:/Users/yuraa/WebstormProjects/fair_price/src/utils/hydrationParser'
+  import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/hydrationParser')
   // @ts-ignore
-  export type { ScrapedProduct } from '/home/runner/work/fair-price/fair-price/src/utils/priceScraper'
-  import('/home/runner/work/fair-price/fair-price/src/utils/priceScraper')
+  export type { ScrapedProduct } from 'C:/Users/yuraa/WebstormProjects/fair_price/src/utils/priceScraper'
+  import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/priceScraper')
   // @ts-ignore
-  export type { SitemapEntry } from '/home/runner/work/fair-price/fair-price/src/utils/sitemapParser'
-  import('/home/runner/work/fair-price/fair-price/src/utils/sitemapParser')
+  export type { SitemapEntry } from 'C:/Users/yuraa/WebstormProjects/fair_price/src/utils/sitemapParser'
+  import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/sitemapParser')
 }
