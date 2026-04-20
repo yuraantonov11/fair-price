@@ -35,7 +35,7 @@ async function main() {
   console.log('1) Connectivity check');
   const { count, error: connectivityError } = await supabase
     .from('products')
-    .select('*', { count: 'exact', head: true });
+    .select('id', { count: 'exact', head: true });
 
   if (connectivityError) {
     console.error(`   ❌ Помилка: ${getErrorMessage(connectivityError)}\n`);
@@ -79,8 +79,8 @@ async function main() {
   console.log('4) Stats check');
   const [{ count: productsCount, error: productsCountError }, { count: historyCount, error: historyCountError }] =
     await Promise.all([
-      supabase.from('products').select('*', { count: 'exact', head: true }),
-      supabase.from('price_history').select('*', { count: 'exact', head: true }),
+      supabase.from('products').select('id', { count: 'exact', head: true }),
+      supabase.from('price_history').select('id', { count: 'exact', head: true }),
     ]);
 
   if (productsCountError || historyCountError) {
