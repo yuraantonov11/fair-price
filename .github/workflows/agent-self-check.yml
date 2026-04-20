@@ -1,0 +1,76 @@
+name: AI Agent Self-Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_crawler_smoke:
+        description: 'Run crawler smoke test'
+        required: false
+        type: boolean
+        default: false
+      crawl_limit:
+        description: 'Crawler URL limit for smoke mode'
+        required: false
+        type: string
+        default: '5'
+
+jobs:
+  extension-self-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify extension baseline for AI agent
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: dummy-anon-key-for-doctor
+        run: npm run verify:agent
+
+  crawler-smoke:
+    if: ${{ inputs.run_crawler_smoke }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate required secret
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Missing GitHub secret: SUPABASE_SERVICE_ROLE_KEY"
+            exit 1
+          fi
+
+      - name: Doctor check for crawler
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://mdqcjgxpvvknpehuqrhl.supabase.co' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run doctor:crawl
+
+      - name: Run crawler smoke
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://mdqcjgxpvvknpehuqrhl.supabase.co' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/crawl.mjs --limit "${{ inputs.crawl_limit }}"

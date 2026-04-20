@@ -68,17 +68,25 @@ user_requests
 - Crawler (`scripts/crawl.mjs`) uses `SUPABASE_SERVICE_ROLE_KEY` — reads from `.env.local` locally, from GitHub Secrets in CI.
 
 ## Developer Workflow
-- Install: `npm install`
+- Install: `npm run setup`
+- Local preflight: `npm run doctor`
 - Dev (Chrome MV3): `npm run dev` → opens https://dnipro-m.ua/tovar/… automatically
 - Dev (Firefox): `npm run dev:firefox`
 - Build: `npm run build` / `npm run build:firefox`
 - Package zip: `npm run zip` / `npm run zip:firefox`
 - Unit tests: `npm run test`; CI full check: `npm run ci:check`
+- Agent-ready verification: `npm run verify:agent` (or `npm run verify:full`)
+- Extension diagnostics: `npm run test:extension`
 - **Crawl (test 20 URLs):** `npm run crawl:test`
 - **Crawl (N URLs):** `npm run crawl -- 100`
 - **Crawl (all 2503):** `npm run crawl`
 - Deploy Edge Function: `npx supabase functions deploy crawl-prices`
 - Apply migrations: `npx supabase db push`
+
+## CI / Release Conventions
+- Canonical tag release workflow: `.github/workflows/release.yml`.
+- Manual AI validation workflow: `.github/workflows/agent-self-check.yml`.
+- `.github/workflows/build-release.yml` is legacy manual build-only artifacts workflow (no publishing).
 
 ## Current Gaps to Keep in Mind
 - `src/store/usePriceStore.ts` is a placeholder; runtime flow does not depend on Zustand yet.

@@ -19,7 +19,7 @@
 
 1.  **Встановіть залежності**:
     ```bash
-    npm install
+    npm run setup
     ```
     *Примітка: Переконайтеся, що ви використовуєте Node.js LTS версії (v20+ рекомендується для React 19).*
 
@@ -45,6 +45,13 @@
 3. Для Firefox (опційно) задайте `WXT_FIREFOX_BINARY`, якщо шлях відрізняється від дефолтного в `wxt.config.ts`.
 4. За потреби змініть `WXT_START_URL` (за замовчуванням відкривається сторінка Dnipro-M товару при `npm run dev`).
 5. Для керування шумом логів задайте `VITE_LOG_LEVEL` (`debug` | `info` | `warn` | `error` | `silent`).
+
+### Швидка перевірка середовища
+
+```bash
+npm run doctor
+npm run verify:agent
+```
 
 ### Дебаг
 
@@ -73,11 +80,23 @@
   npm run test:e2e:install
   npm run test:e2e
   ```
+- Діагностика Supabase інтеграції розширення:
+  ```bash
+  npm run test:extension
+  ```
+- Повна перевірка:
+  ```bash
+  npm run verify
+  # або
+  npm run verify:full
+  ```
 
-### CI / деплой артефактів
+### CI / релізи / AI self-check
 
 - Workflow: `.github/workflows/ci.yml`
-- Release workflow: `.github/workflows/release.yml` (запуск по тегу `v*`)
+- Canonical tag release workflow: `.github/workflows/release.yml` (запуск по тегу `v*`)
+- Manual AI self-check: `.github/workflows/agent-self-check.yml`
+- Legacy manual build-only workflow: `.github/workflows/build-release.yml`
 - CI запускає:
   - `npm run ci:check` (typecheck + unit tests)
   - `npm run ci:build` (build + zip для Chrome/Firefox)
@@ -113,13 +132,13 @@
 
 ```powershell
 # 1. Деплой функції
-supabase functions deploy crawl-prices
+npx supabase functions deploy crawl-prices
 
 # 2. Встановити Service Role Key (беретcя з Supabase Dashboard → Settings → API)
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<key>
+npx supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<key>
 
 # 3. Тестовий запуск
-supabase functions invoke crawl-prices --body '{}'
+npx supabase functions invoke crawl-prices --body '{}'
 ```
 
 ## Додавання нових магазинів
