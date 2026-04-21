@@ -23,7 +23,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Static checks and unit tests
+        run: npm run ci:check
+
       - name: Build and package extension
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run ci:build
 
       - name: Publish GitHub release assets
@@ -31,4 +37,3 @@ jobs:
         with:
           files: .output/**/*.zip
           generate_release_notes: true
-

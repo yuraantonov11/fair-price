@@ -15,7 +15,7 @@ export interface GetHistoryMessage {
 export interface SetIconMessage {
     type: 'SET_ICON';
     payload: {
-        status: 'success' | 'error' | 'inactive';
+        status: 'success' | 'error' | 'inactive' | 'single-price';
     };
 }
 

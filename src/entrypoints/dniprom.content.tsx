@@ -1,5 +1,6 @@
 import { DniproMAdapter } from '@/adapters/DniproMAdapter';
 import { ExtensionController } from '@/core/ExtensionController';
+import { HonestyResult } from '@/core/HonestyCalculator';
 import { injectUI } from '@/ui/injector';
 import { createLogger } from '@/utils/logger';
 
@@ -18,7 +19,7 @@ export default defineContentScript({
     const adapter = new DniproMAdapter();
 
     // Замість ручного createRoot, просто викликаємо нашу функцію з injector.tsx
-    const renderReactUI = (container: HTMLElement, history: any[], honestyScore: { score: number; message: string }) => {
+    const renderReactUI = (container: HTMLElement, history: any[], honestyScore: HonestyResult) => {
       injectUI(container, history, honestyScore);
     };
 

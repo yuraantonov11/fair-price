@@ -1,4 +1,5 @@
 import { createRoot, Root } from 'react-dom/client';
+import { HonestyResult } from '@/core/HonestyCalculator';
 import { PriceChart } from './components/PriceChart';
 import tailwindStyles from '@/ui/styles.css?inline';
 import { createLogger } from '@/utils/logger';
@@ -20,7 +21,7 @@ const HOST_RESET = `
 export async function injectUI(
     targetContainer: HTMLElement,
     history: any[],
-    honesty: { score: number; message: string }
+    honesty: HonestyResult
 ) {
     try {
         cleanupUI();

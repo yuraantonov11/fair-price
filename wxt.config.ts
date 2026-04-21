@@ -1,5 +1,9 @@
 import { defineConfig } from 'wxt';
 import tailwindcss from '@tailwindcss/vite';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { version } = require('./package.json') as { version: string };
 
 const firefoxBinaryPath = process.env.WXT_FIREFOX_BINARY || 'C:/Program Files/Firefox Developer Edition/firefox.exe';
 const devStartUrl = process.env.WXT_START_URL || 'https://dnipro-m.ua/tovar/akumulyatorna-lancyugova-pila-dms-201bc/';
@@ -13,7 +17,7 @@ export default defineConfig({
   manifest: {
     name: "Чесна Ціна",
     short_name: "FairPrice",
-    version: "1.0.0",
+    version,
     description: "Автоматичний моніторинг цін та перевірка реальності знижок в українських інтернет-магазинах.",
     author: {
       email: "yuraantonov11@gmail.com"

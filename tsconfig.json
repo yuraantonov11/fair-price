@@ -15,8 +15,11 @@
     "types": ["chrome", "wxt"]
   },
   "include": [
-    "entrypoints/**/*",
     "src/**/*",
+    "tests/**/*",
+    "vitest.config.ts",
+    "playwright.config.ts",
+    "wxt.config.ts",
     ".wxt/types/**/*"
   ]
 }

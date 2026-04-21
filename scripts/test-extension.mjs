@@ -7,8 +7,9 @@ import { resolve } from 'node:path';
 loadEnvFile('.env');
 loadEnvFile('.env.local');
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY;
+const WRITE_CHECK = process.argv.includes('--write');
 
 function getErrorMessage(error) {
   if (error instanceof Error) return error.message || error.name;
@@ -21,7 +22,7 @@ function getErrorMessage(error) {
 }
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('❌ Missing env vars: VITE_SUPABASE_URL/SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required');
+  console.error('❌ Missing env vars: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are required');
   process.exit(1);
 }
 
@@ -38,11 +39,11 @@ async function main() {
     .select('id', { count: 'exact', head: true });
 
   if (connectivityError) {
-    console.error(`   ❌ Помилка: ${getErrorMessage(connectivityError)}\n`);
+    console.error(`   ❌ Error: ${getErrorMessage(connectivityError)}\n`);
     process.exit(1);
   }
 
-  console.log(`   ✅ Supabase доступний (products: ${count ?? 'unknown'})\n`);
+  console.log(`   ✅ Supabase accessible (products: ${count ?? 'unknown'})\n`);
 
   console.log('2) History query check');
   const { data: history, error: historyError } = await supabase
@@ -51,30 +52,35 @@ async function main() {
     .limit(1);
 
   if (historyError) {
-    console.error(`   ❌ Помилка: ${getErrorMessage(historyError)}\n`);
+    console.error(`   ❌ Error: ${getErrorMessage(historyError)}\n`);
     process.exit(1);
   }
 
-  console.log(`   ✅ Query працює (rows: ${history?.length ?? 0})\n`);
+  console.log(`   ✅ Query works (rows: ${history?.length ?? 0})\n`);
 
-  console.log('3) RPC record_price check');
-  const { error: rpcError } = await supabase.rpc('record_price', {
-    p_store_domain: 'diagnostics.fair-price.local',
-    p_external_id: 'diagnostic-product',
-    p_url: 'https://diagnostics.fair-price.local/tovar/extension-health-check',
-    p_name: 'Extension Health Check',
-    p_price: 10000,
-    p_regular_price: 12000,
-    p_promo_name: 'Diagnostics',
-    p_is_available: true,
-  });
+  if (WRITE_CHECK) {
+    console.log('3) RPC record_price write check (--write enabled)');
+    const { error: rpcError } = await supabase.rpc('record_price', {
+      p_store_domain: 'diagnostics.fair-price.local',
+      p_external_id: 'diagnostic-product',
+      p_url: 'https://diagnostics.fair-price.local/tovar/extension-health-check',
+      p_name: 'Extension Health Check',
+      p_price: 10000,
+      p_regular_price: 12000,
+      p_promo_name: 'Diagnostics',
+      p_is_available: true,
+    });
 
-  if (rpcError) {
-    console.error(`   ❌ Помилка: ${getErrorMessage(rpcError)}\n`);
-    process.exit(1);
+    if (rpcError) {
+      console.error(`   ❌ Error: ${getErrorMessage(rpcError)}\n`);
+      process.exit(1);
+    }
+
+    console.log('   ✅ RPC record_price works\n');
+  } else {
+    console.log('3) RPC record_price write check');
+    console.log('   ⏭️  Skipped by default (run `npm run test:extension -- --write` to enable)\n');
   }
-
-  console.log('   ✅ RPC record_price працює\n');
 
   console.log('4) Stats check');
   const [{ count: productsCount, error: productsCountError }, { count: historyCount, error: historyCountError }] =
@@ -84,7 +90,7 @@ async function main() {
     ]);
 
   if (productsCountError || historyCountError) {
-    console.error(`   ❌ Помилка: ${getErrorMessage(productsCountError || historyCountError)}\n`);
+    console.error(`   ❌ Error: ${getErrorMessage(productsCountError || historyCountError)}\n`);
     process.exit(1);
   }
 

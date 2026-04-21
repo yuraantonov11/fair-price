@@ -6,6 +6,13 @@ const logger = createLogger('background', { runtime: 'background' });
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+const ICON_PATHS = {
+  success: 'icons/icon_success.png',
+  error: 'icons/icon_error.png',
+  inactive: 'icons/icon_inactive.png',
+  'single-price': 'icons/icon_single-price.png',
+} as const;
+
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return `${error.name}: ${error.message}`;
   if (typeof error === 'string') return error;
@@ -171,12 +178,14 @@ export default defineBackground(() => {
 
     if (tabId) {
       try {
+        const iconPath = ICON_PATHS[status] || ICON_PATHS.inactive;
+
         // Передаємо об'єкт розмірів без початкового слеша для кросбраузерності
         await browser.action.setIcon({
           path: {
-            "16": `icons/icon_${status}.png`,
-            "48": `icons/icon_${status}.png`,
-            "128": `icons/icon_${status}.png`
+            "16": iconPath,
+            "48": iconPath,
+            "128": iconPath
           },
           tabId: tabId
         });

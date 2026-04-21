@@ -10,6 +10,7 @@ declare module "wxt/browser" {
     | "/content-scripts/rozetka.js"
     | "/icons/icon_error.png"
     | "/icons/icon_inactive.png"
+    | "/icons/icon_single-price.png"
     | "/icons/icon_success.png"
     | "/popup.html"
   type HtmlPublicPath = Extract<PublicPath, `${string}.html`>
