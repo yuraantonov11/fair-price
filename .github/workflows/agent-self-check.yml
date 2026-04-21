@@ -1,0 +1,79 @@
+name: Agent Self Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_crawler_smoke:
+        description: 'Run crawler smoke test (writes a small sample to Supabase)'
+        required: false
+        type: boolean
+        default: false
+      crawl_limit:
+        description: 'Crawler smoke URL limit'
+        required: false
+        type: string
+        default: '5'
+
+jobs:
+  extension-self-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Agent verify (doctor + checks + build)
+        env:
+          VITE_SUPABASE_URL: https://example.supabase.co
+          VITE_SUPABASE_ANON_KEY: dummy-anon-key
+        run: npm run verify:agent
+
+  crawler-smoke:
+    if: ${{ inputs.run_crawler_smoke == true }}
+    needs: extension-self-check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate crawler secrets
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Missing GitHub secret: SUPABASE_SERVICE_ROLE_KEY"
+            echo "Set it in Settings -> Secrets and variables -> Actions"
+            exit 1
+          fi
+
+      - name: Crawler preflight
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://mdqcjgxpvvknpehuqrhl.supabase.co' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run doctor:crawl
+
+      - name: Run crawler smoke
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://mdqcjgxpvvknpehuqrhl.supabase.co' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/crawl.mjs --limit "${{ inputs.crawl_limit }}"
+

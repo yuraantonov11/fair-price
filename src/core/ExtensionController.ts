@@ -1,5 +1,5 @@
 import { IPriceAdapter } from '@/adapters/IPriceAdapter';
-import { HonestyCalculator } from './HonestyCalculator';
+import { HonestyCalculator, HonestyResult } from './HonestyCalculator';
 import { MessageRouter } from "@/core/MessageRouter";
 import { createLogger } from '@/utils/logger';
 
@@ -11,13 +11,13 @@ export class ExtensionController {
 
     // Кеш для відновлення після агресивних перемалювань (Angular/React)
     private cachedHistory: any[] | null = null;
-    private cachedHonestyScore: { score: number; message: string } | null = null;
+    private cachedHonestyScore: HonestyResult | null = null;
     private isProcessing = false;
     private logger;
 
     constructor(
         adapter: IPriceAdapter,
-        private renderUI: (container: HTMLElement, history: any[], honestyScore: { score: number; message: string }) => void
+        private renderUI: (container: HTMLElement, history: any[], honestyScore: HonestyResult) => void
     ) {
         this.adapter = adapter;
         this.currentUrl = window.location.href;
@@ -160,7 +160,11 @@ export class ExtensionController {
                 productData.category
             );
 
-            const iconStatus = honestyResult.score === -1 ? 'inactive' : (honestyResult.score < 40 ? 'error' : 'success');
+            const iconStatus = honestyResult.state === 'single-price'
+                ? 'single-price'
+                : honestyResult.state !== 'analyzed'
+                    ? 'inactive'
+                    : (honestyResult.score < 40 ? 'error' : 'success');
             MessageRouter.send({ type: 'SET_ICON', payload: { status: iconStatus } }).catch(() => {});
 
             // Зберігаємо в кеш для моментального відновлення
@@ -176,7 +180,7 @@ export class ExtensionController {
         }
     }
 
-    private async injectUI(history: any[], honestyScore: { score: number; message: string }) {
+    private async injectUI(history: any[], honestyScore: HonestyResult) {
         const anchor = this.adapter.getUIAnchor();
         if (!anchor) return;
 

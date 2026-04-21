@@ -1,5 +1,6 @@
 import { RozetkaAdapter } from '@/adapters/RozetkaAdapter';
 import { ExtensionController } from '@/core/ExtensionController';
+import { HonestyResult } from '@/core/HonestyCalculator';
 import { createRoot } from 'react-dom/client';
 import { PriceChart } from '@/ui/components/PriceChart';
 import '@/ui/styles.css';
@@ -19,7 +20,7 @@ export default defineContentScript({
     const renderReactUI = (
         container: HTMLElement,
         history: any[],
-        honestyScore: { score: number; message: string }
+        honestyScore: HonestyResult
     ) => {
       // Якщо контейнер новий (після відновлення SPA), створюємо новий React Root.
       // Зберігаємо екземпляр root прямо в DOM-елементі, щоб не плутати старі і нові контейнери.

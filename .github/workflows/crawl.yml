@@ -40,7 +40,7 @@ jobs:
 
       - name: Run crawler script
         env:
-          SUPABASE_URL: https://mdqcjgxpvvknpehuqrhl.supabase.co
+          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://mdqcjgxpvvknpehuqrhl.supabase.co' }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           if [ -n "${{ github.event.inputs.limit }}" ]; then

@@ -15,15 +15,26 @@
 - `src/core/`: Бізнес-логіка (адаптери магазинів, розрахунок чесності).
 - `src/ui/`: Компоненти інтерфейсу (Shadow DOM ін'єктор).
 
-## Як запустити
+## Швидкий старт (людина + AI агент)
 
 1.  **Встановіть залежності**:
     ```bash
-    npm install
+    npm run setup
     ```
     *Примітка: Переконайтеся, що ви використовуєте Node.js LTS версії (v20+ рекомендується для React 19).*
 
-2.  **Запустіть режим розробки**:
+2. **Підготуйте змінні оточення**:
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+   Заповніть `VITE_SUPABASE_URL` і `VITE_SUPABASE_ANON_KEY`.
+
+3. **Перевірте preflight**:
+   ```bash
+   npm run doctor
+   ```
+
+4.  **Запустіть режим розробки**:
     ```bash
     npm run dev
     ```
@@ -45,6 +56,21 @@
 3. Для Firefox (опційно) задайте `WXT_FIREFOX_BINARY`, якщо шлях відрізняється від дефолтного в `wxt.config.ts`.
 4. За потреби змініть `WXT_START_URL` (за замовчуванням відкривається сторінка Dnipro-M товару при `npm run dev`).
 5. Для керування шумом логів задайте `VITE_LOG_LEVEL` (`debug` | `info` | `warn` | `error` | `silent`).
+6. Для crawler-режиму додайте `SUPABASE_SERVICE_ROLE_KEY` (і за бажанням `SUPABASE_URL`).
+
+### Автономна перевірка для AI агента
+
+```bash
+npm run verify:agent
+```
+
+Це виконує: preflight (`doctor`) -> typecheck -> unit tests -> log policy check -> build.
+
+Для crawler-інтеграції:
+
+```bash
+npm run verify:agent:crawl
+```
 
 ### Дебаг
 
@@ -59,6 +85,10 @@
 - Unit-тести (Vitest):
   ```bash
   npm run test
+  ```
+- Повна перевірка локально (як перед PR):
+  ```bash
+  npm run verify
   ```
 - Перевірка, що в коді немає `console.*` поза `src/utils/logger.ts`:
   ```bash
@@ -77,14 +107,17 @@
 ### CI / деплой артефактів
 
 - Workflow: `.github/workflows/ci.yml`
-- Release workflow: `.github/workflows/release.yml` (запуск по тегу `v*`)
+- Canonical release workflow: `.github/workflows/release.yml` (запуск по тегу `v*`)
+- Daily crawl workflow: `.github/workflows/crawl.yml`
+- Manual AI self-check workflow: `.github/workflows/agent-self-check.yml`
+- Legacy manual build-only workflow: `.github/workflows/build-release.yml`
 - CI запускає:
   - `npm run ci:check` (typecheck + unit tests)
   - `npm run ci:build` (build + zip для Chrome/Firefox)
 - Після виконання workflow артефакти доступні як `extension-output`.
 - `release.yml` публікує `.output/**/*.zip` у GitHub Release.
 
-3.  **Збірка для публікації**:
+5.  **Збірка для публікації**:
     ```bash
     npm run build
     ```
@@ -113,13 +146,13 @@
 
 ```powershell
 # 1. Деплой функції
-supabase functions deploy crawl-prices
+npx supabase functions deploy crawl-prices
 
 # 2. Встановити Service Role Key (беретcя з Supabase Dashboard → Settings → API)
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<key>
+npx supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<key>
 
 # 3. Тестовий запуск
-supabase functions invoke crawl-prices --body '{}'
+npx supabase functions invoke crawl-prices --body '{}'
 ```
 
 ## Додавання нових магазинів
