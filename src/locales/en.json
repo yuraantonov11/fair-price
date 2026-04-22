@@ -1,0 +1,115 @@
+{
+  "chart": {
+    "fairprice": "FairPrice",
+    "priceHistory": "Price history · {{count}} records",
+    "priceTrend": "Price trend",
+    "notEnoughData": "Not enough data.",
+
+    "trend": {
+      "rising": "Rising",
+      "falling": "Falling",
+      "stable": "Stable"
+    },
+
+    "score": {
+      "label": "Honesty index",
+      "baseline": "50 = baseline · 70+ = discount",
+      "suspicious": "Suspicious",
+      "normal": "Normal",
+      "decent": "Decent",
+      "goodDeal": "Good deal"
+    },
+
+    "warnings": {
+      "volatile": "This item is naturally volatile — evaluate with caution",
+      "spike": "Possible artificial price spike before a \"discount\" detected"
+    },
+
+    "stats": {
+      "min90": "Min · 90d",
+      "median": "Median",
+      "max90": "Max · 90d"
+    },
+
+    "tooltip": {
+      "regularPrice": "Regular price"
+    },
+
+    "collecting": {
+      "title": "Starting monitoring",
+      "counter": "{{count}} / 3 records",
+      "observationLabel": "Price observation"
+    },
+
+    "preview": {
+      "title": "Preliminary analysis",
+      "counter": "{{count}} / 3 records",
+      "lowestObserved": "Lowest observed",
+      "highestObserved": "Highest observed",
+      "observationLabel": "Price observation",
+      "recordedObservations": "Recorded observations",
+      "currentAtMin": "Current price ({{price}} ₴) is the lowest we have seen. It may be a good time to buy.",
+      "currentAtMax": "Current price ({{price}} ₴) is near the highest level we observed (+{{pct}}% vs minimum).",
+      "currentBetween": "Current price ({{price}} ₴) is between our observed minimum and maximum (+{{pct}}% vs minimum).",
+      "disclaimer": "These prices are observed independently by us. The store may show \"regular\" and \"sale\" prices that are not part of our observations."
+    },
+
+    "singlePrice": {
+      "title": "First confirmed price",
+      "counter": "1 record",
+      "observedPrice": "Observed price",
+      "heldFor": "Held for",
+      "firstSeen": "First seen",
+      "datePending": "date pending",
+      "footer": "This is only the first observation so far. We can already show how long this price has held, but a reliable discount fairness score needs a few more history records.",
+      "lessThanDay": "less than a day",
+      "day": "1 day",
+      "days": "{{count}} days"
+    }
+  },
+
+  "popup": {
+    "title": "FAIR PRICE",
+    "tabs": {
+      "status": "Status",
+      "feedback": "Feedback"
+    },
+    "status": {
+      "currentSite": "Current site",
+      "unsupported": "We don't monitor this store yet",
+      "suggestSite": "Suggest this site"
+    },
+    "feedback": {
+      "prompt": "Found a bug or want to add a new store?",
+      "placeholder": "Describe the issue or enter the store name...",
+      "reportBug": "REPORT BUG",
+      "addSite": "ADD SITE",
+      "thanks": "Thank you! 🚀",
+      "requestReceived": "Your request has been received.",
+      "sendAnother": "Send another"
+    },
+    "language": "Language"
+  },
+
+  "calculator": {
+    "invalidPrice": "Error: invalid current price.",
+    "noHistory": "Just started collecting price history for analysis.",
+    "firstPriceSame": "First confirmation: this price has been stable for a while. More conclusions once we collect a few more observations.",
+    "firstPriceDiff": "Only one recorded price in history. We can show when it was last seen, but a full analysis needs more observations.",
+    "collecting": "Collecting price history for analysis...",
+    "insufficientData": "Not enough valid data for analysis.",
+    "spike": "Suspected manipulation: price was artificially raised to {{max}} ₴, now appearing as a \"discount\".",
+    "goodDeal": "Great price — {{pct}}% below the usual. Looks like a genuine discount.",
+    "normal": "Price within normal range. No significant discount, but no overpaying either.",
+    "highPrice": "Price is {{pct}}% above normal for this item. Worth waiting.",
+    "veryHigh": "Price is significantly above normal (+{{pct}}%). Not recommended to buy now.",
+    "volatileNote": " (Note: this item's price naturally fluctuates.)",
+    "spikeVolatile": "Suspected manipulation: price was artificially raised to {{max}} ₴, now appearing as a \"discount\".",
+    "goodDealVolatile": "Great price — {{pct}}% below the usual. Looks like a genuine discount. (Note: this item's price naturally fluctuates.)",
+    "normalVolatile": "Price within normal range. No significant discount, but no overpaying either. (Note: this item's price naturally fluctuates.)",
+    "highPriceVolatile": "Price is {{pct}}% above normal for this item. Worth waiting. (Note: this item's price naturally fluctuates.)",
+    "veryHighVolatile": "Price is significantly above normal (+{{pct}}%). Not recommended to buy now. (Note: this item's price naturally fluctuates.)"
+  }
+}
+
+

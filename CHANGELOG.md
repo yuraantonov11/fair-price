@@ -5,7 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2026-04-21
+## [1.2.0] - 2026-04-22
+
+### Added
+- Full i18n (English / Ukrainian) using `i18next` + `react-i18next`
+- Language switcher (EN / UK) in extension popup, persisted via `browser.storage.sync`
+- Language change in popup **instantly** re-renders the content script chart (via `storage.onChanged`)
+- `chart test mode` — activate via `?fp_test=1&fp_records=N&fp_scenario=flat|discount|spike|volatile|rising` URL params for UI testing without real data
+- `TEST MODE` badge shown in chart when test mode is active
+- `single-price` state: dedicated card showing observed price, days held, first-seen date
+- `collecting` preview card (2 records): shows min/max observed prices and current-price context
+- Spike detection with adaptive threshold (25% stable / 40% volatile products)
+- Volatility detection (CV > 25%) with warning badge
+- Trend indicator (↑ Rising / ↓ Falling / → Stable) based on recent price movement
+- Stats bar: Min · 90d / Median / Max · 90d below the chart
+- `docs/store-listing.md` — Chrome Web Store / Firefox AMO submission guide
+- `docs/privacy-policy.md` — required for store submission
+
+### Changed
+- Score algorithm rewritten: median-anchored formula `score = clamp(50 × (2 − price/median), 0, 100)`
+- `HonestyCalculator` now returns `messageKey` + `messageParams` (i18n keys) alongside legacy `message`
+- All CI/CD workflows upgraded from Node.js 20 → 24
+- Removed unused `alarms` and `declarativeNetRequest` permissions from manifest
+- Removed unused `zustand` dependency
+
+### Fixed
+- Language preference was not shared between popup and content script (now uses `browser.storage.sync`)
+- `usePriceStore.ts` placeholder no longer exports a misleading object
+
+
 
 ### Added
 - Standalone Node.js crawler (`scripts/crawl.mjs`) replacing Edge Function for full-scale daily runs

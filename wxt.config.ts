@@ -36,9 +36,7 @@ export default defineConfig({
       }
     },
     permissions: [
-      "storage",
-      "alarms",
-      "declarativeNetRequest"
+      "storage"
     ],
     host_permissions: [
       "*://dnipro-m.ua/*",

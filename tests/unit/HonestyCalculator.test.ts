@@ -18,7 +18,7 @@ describe('HonestyCalculator', () => {
 
     expect(result.score).toBe(-1);
     expect(result.state).toBe('single-price');
-    expect(result.message).toContain('ця ціна вже тримається');
+    expect(result.messageKey).toBe('calculator.firstPriceSame');
     expect(result.details?.entryCount).toBe(1);
     expect(result.details?.daysAtObservedPrice).toBe(7);
   });
@@ -33,7 +33,7 @@ describe('HonestyCalculator', () => {
 
     expect(result.score).toBe(-1);
     expect(result.state).toBe('collecting');
-    expect(result.message).toContain('Збираємо історію цін');
+    expect(result.messageKey).toBe('calculator.collecting');
     expect(result.details?.entryCount).toBe(2);
     expect(result.details?.observedPrices).toBeDefined();
     expect(result.details?.observedPrices?.length).toBe(2);
@@ -100,7 +100,7 @@ describe('HonestyCalculator', () => {
     const analyzed = asAnalyzedDetails(result.details);
     expect(result.state).toBe('analyzed');
     expect(analyzed.hasSpike).toBe(true);
-    expect(result.message).toContain('маніпуляц');
+    expect(result.messageKey).toContain('calculator.spike');
   });
 
   it('returns bounded score [0,100] for any valid inputs', () => {

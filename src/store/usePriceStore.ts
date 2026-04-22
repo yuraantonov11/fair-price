@@ -1,6 +1,4 @@
-// Placeholder for usePriceStore.ts (Zustand + chrome.storage)
-// export const usePriceStore = create(...)
+// usePriceStore.ts is reserved for future Zustand + chrome.storage integration.
+// Not part of the current runtime.
+export {};
 
-export const usePriceStore = {
-    // TODO: Implement Zustand store with chrome.storage persistence
-};

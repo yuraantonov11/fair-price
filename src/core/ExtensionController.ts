@@ -2,6 +2,7 @@ import { IPriceAdapter } from '@/adapters/IPriceAdapter';
 import { HonestyCalculator, HonestyResult } from './HonestyCalculator';
 import { MessageRouter } from "@/core/MessageRouter";
 import { createLogger } from '@/utils/logger';
+import { resolveChartTestMode } from '@/core/chartTestMode';
 
 export class ExtensionController {
     private adapter: IPriceAdapter;
@@ -116,49 +117,34 @@ export class ExtensionController {
                 date: new Date(item.date).getTime()
             }));
 
-            // ==========================================
-            // 🛠 РЕЖИМ РОЗРОБНИКА (MOCK DATA)
-            // ==========================================
-            const DEV_MODE = false; // Зміни на false перед релізом!
-            const SCENARIO: 'FAKE' | 'HONEST' | 'COLLECTING' = 'FAKE';
-
-            if (DEV_MODE) {
-                const now = Date.now();
-                const day = 24 * 60 * 60 * 1000;
-
-                if (SCENARIO === 'FAKE') {
-                    productData.price = 1999 * 100;
-                    mappedHistory = [
-                        { price: 2500, oldPrice: null, promoName: null, date: now - 60 * day },
-                        { price: 2400, oldPrice: 2800, promoName: 'Весняний розпродаж', date: now - 30 * day },
-                        { price: 3200, oldPrice: null, promoName: null, date: now - 12 * day },
-                        { price: 1999, oldPrice: 3500, promoName: 'Супер Знижка', date: now }
-                    ];
+            const liveCurrentPrice = productData.price / 100;
+            const chartTestMode = resolveChartTestMode(window.location.href, liveCurrentPrice);
+            if (chartTestMode.enabled) {
+                mappedHistory = chartTestMode.history ?? mappedHistory;
+                if (chartTestMode.currentPrice != null) {
+                    productData.price = Math.round(chartTestMode.currentPrice * 100);
                 }
-                else if (SCENARIO === 'HONEST') {
-                    productData.price = 1800 * 100;
-                    mappedHistory = [
-                        { price: 2500, oldPrice: null, promoName: null, date: now - 60 * day },
-                        { price: 2500, oldPrice: null, promoName: null, date: now - 45 * day },
-                        { price: 2450, oldPrice: null, promoName: null, date: now - 30 * day },
-                        { price: 2450, oldPrice: null, promoName: null, date: now - 10 * day },
-                        { price: 1800, oldPrice: 2450, promoName: 'Чесний Розпродаж', date: now }
-                    ];
-                }
-                else if (SCENARIO === 'COLLECTING') {
-                    productData.price = 2500 * 100;
-                    mappedHistory = [
-                        { price: 2500, oldPrice: null, promoName: null, date: now - 2 * day }
-                    ];
-                }
+                this.logger.info('Chart test mode enabled', {
+                    source: chartTestMode.source,
+                    records: chartTestMode.recordCount,
+                    scenario: chartTestMode.scenario,
+                    url: this.currentUrl,
+                });
             }
-            // ==========================================
 
             const honestyResult = HonestyCalculator.calculate(
                 productData.price / 100,
                 mappedHistory,
                 productData.category
             );
+
+            if (chartTestMode.enabled) {
+                honestyResult.details = {
+                    entryCount: mappedHistory.length,
+                    ...(honestyResult.details ?? {}),
+                    isTestMode: true,
+                };
+            }
 
             const iconStatus = honestyResult.state === 'single-price'
                 ? 'single-price'
