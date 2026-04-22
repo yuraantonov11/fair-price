@@ -1,10 +1,16 @@
 export type HonestyState = 'invalid' | 'collecting' | 'single-price' | 'analyzed';
 export type PriceTrend = 'rising' | 'falling' | 'stable';
 
+export interface HonestyMessageParams {
+  max?: number;
+  pct?: number;
+}
+
 export interface HonestyDetails {
   entryCount: number;
   firstSeenAt?: number;
   lastSeenAt?: number;
+  isTestMode?: boolean;
 
   // collecting / single-price
   observedPrice?: number;
@@ -22,9 +28,13 @@ export interface HonestyDetails {
 }
 
 export interface HonestyResult {
-  score: number; // -1 = no analysis; 0-100: 50=normal, 70+=good deal, 30-=suspicious
+  score: number;
+  /** Translation key from calculator namespace */
+  messageKey: string;
+  /** Optional interpolation params for the translation key */
+  messageParams?: HonestyMessageParams;
+  /** @deprecated use messageKey + messageParams, kept for backward compat during migration */
   message: string;
   state: HonestyState;
   details?: HonestyDetails;
 }
-

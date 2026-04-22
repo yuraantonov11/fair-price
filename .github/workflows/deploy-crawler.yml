@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
@@ -39,4 +39,3 @@ jobs:
           echo ""
           echo "To view logs:"
           echo "npx supabase functions logs crawl-prices --tail"
-
