@@ -31,10 +31,15 @@ export class HonestyCalculator {
     static calculate(
         currentPrice: number,
         priceHistory: { price: number; date: number }[],
-        category: string = 'Загальна',
+        category: string = 'General',
     ): HonestyResult {
         if (!currentPrice || currentPrice <= 0) {
-            return { score: 0, message: 'Помилка: Некоректна поточна ціна товару.', state: 'invalid' };
+            return {
+                score: 0,
+                messageKey: 'calculator.invalidPrice',
+                message: 'Error: invalid current price.',
+                state: 'invalid',
+            };
         }
 
         const validHistory = priceHistory
@@ -44,7 +49,8 @@ export class HonestyCalculator {
         if (validHistory.length === 0) {
             return {
                 score: -1,
-                message: 'Щойно почали збирати історію цін для аналізу.',
+                messageKey: 'calculator.noHistory',
+                message: 'Just started collecting price history for analysis.',
                 state: 'collecting',
                 details: { entryCount: 0 },
             };
@@ -53,11 +59,15 @@ export class HonestyCalculator {
         if (validHistory.length === 1) {
             const pt = validHistory[0];
             const daysAtObservedPrice = Math.floor(Math.max(0, Date.now() - pt.date) / 86_400_000);
+            const messageKey = currentPrice === pt.price
+                ? 'calculator.firstPriceSame'
+                : 'calculator.firstPriceDiff';
             const message = currentPrice === pt.price
-                ? 'Маємо перше підтвердження: ця ціна вже тримається деякий час. Покажемо більше висновків, щойно зберемо ще кілька спостережень.'
-                : 'Маємо лише одну зафіксовану ціну в історії. Уже можемо показати, коли вона була актуальною, але для повного аналізу потрібно більше спостережень.';
+                ? 'First confirmation: this price has been stable for a while. More conclusions once we collect a few more observations.'
+                : 'Only one recorded price in history. We can show when it was last seen, but a full analysis needs more observations.';
             return {
                 score: -1,
+                messageKey,
                 message,
                 state: 'single-price',
                 details: {
@@ -73,7 +83,8 @@ export class HonestyCalculator {
         if (validHistory.length < 3) {
             return {
                 score: -1,
-                message: 'Збираємо історію цін для аналізу...',
+                messageKey: 'calculator.collecting',
+                message: 'Collecting price history for analysis...',
                 state: 'collecting',
                 details: {
                     entryCount: validHistory.length,
@@ -101,7 +112,12 @@ export class HonestyCalculator {
         const stdDev = this.calculateStdDev(prices, mean);
 
         if (median === 0) {
-            return { score: 0, message: 'Недостатньо коректних даних для аналізу.', state: 'invalid' };
+            return {
+                score: 0,
+                messageKey: 'calculator.insufficientData',
+                message: 'Not enough valid data for analysis.',
+                state: 'invalid',
+            };
         }
 
         // Volatility: CV (coefficient of variation) > 25% → volatile product
@@ -136,26 +152,36 @@ export class HonestyCalculator {
 
         // ── Verdict message ─────────────────────────────────────────────
         const priceVsMedianPct = Math.round((currentPrice - median) / median * 100);
-        let message: string;
+        let messageKey: string;
+        let messageParams: { max?: number; pct?: number } | undefined;
 
         if (hasSpike) {
-            message = `Підозра на маніпуляцію: ціна штучно підіймалась до ${Math.round(maxRecent)} ₴, тепер виглядає як "знижка".`;
+            messageKey = 'calculator.spike';
+            messageParams = { max: Math.round(maxRecent) };
         } else if (score >= 70) {
-            message = `Вигідна ціна — на ${Math.abs(priceVsMedianPct)}% нижче за звичайну. Схоже на справжню знижку.`;
+            messageKey = 'calculator.goodDeal';
+            messageParams = { pct: Math.abs(priceVsMedianPct) };
         } else if (score >= 50) {
-            message = 'Ціна в межах норми. Суттєвої знижки немає, але і переплати теж.';
+            messageKey = 'calculator.normal';
         } else if (score >= 35) {
-            message = `Ціна на ${priceVsMedianPct}% вища за звичайну для цього товару. Варто почекати.`;
+            messageKey = 'calculator.highPrice';
+            messageParams = { pct: priceVsMedianPct };
         } else {
-            message = `Ціна значно вища за звичайну (+${priceVsMedianPct}%). Рекомендуємо не купувати зараз.`;
+            messageKey = 'calculator.veryHigh';
+            messageParams = { pct: priceVsMedianPct };
         }
 
         if (isVolatile && !hasSpike) {
-            message += ' (Увага: ціна цього товару природно коливається.)';
+            messageKey += 'Volatile';
         }
+
+        // Legacy fallback message (English)
+        const message = `Score: ${Math.round(score)} (key: ${messageKey})`;
 
         return {
             score: Math.round(score),
+            messageKey,
+            messageParams,
             message,
             state: 'analyzed',
             details: {

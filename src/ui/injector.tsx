@@ -1,13 +1,19 @@
+import React from 'react';
 import { createRoot, Root } from 'react-dom/client';
+import { I18nextProvider } from 'react-i18next';
 import { HonestyResult } from '@/core/HonestyCalculator';
 import { PriceChart } from './components/PriceChart';
 import tailwindStyles from '@/ui/styles.css?inline';
 import { createLogger } from '@/utils/logger';
+import i18nInstance, { initLanguage, watchLanguage } from '@/utils/i18n';
 
 const logger = createLogger('injector', { runtime: 'content', area: 'ui' });
 
 let reactRoot: Root | null = null;
 let mountContainer: HTMLElement | null = null;
+let currentHistory: any[] | null = null;
+let currentHonesty: HonestyResult | null = null;
+let unwatchLang: (() => void) | null = null;
 
 const HOST_RESET = `
   :host { 
@@ -18,6 +24,15 @@ const HOST_RESET = `
   }
 `;
 
+function renderChart() {
+  if (!reactRoot || !currentHistory || !currentHonesty) return;
+  reactRoot.render(
+    <I18nextProvider i18n={i18nInstance}>
+      <PriceChart data={currentHistory} honesty={currentHonesty} />
+    </I18nextProvider>
+  );
+}
+
 export async function injectUI(
     targetContainer: HTMLElement,
     history: any[],
@@ -25,6 +40,12 @@ export async function injectUI(
 ) {
     try {
         cleanupUI();
+
+        // Load persisted language before first render
+        await initLanguage();
+
+        currentHistory = history;
+        currentHonesty = honesty;
 
         mountContainer = document.createElement('div');
         mountContainer.id = 'fair-price-shadow-host';
@@ -42,7 +63,10 @@ export async function injectUI(
         shadowRoot.appendChild(reactContainer);
 
         reactRoot = createRoot(reactContainer);
-        reactRoot.render(<PriceChart data={history} honesty={honesty} />);
+        renderChart();
+
+        // Live language switch: re-render whenever popup changes the language
+        unwatchLang = watchLanguage(() => renderChart());
 
     } catch (error) {
         logger.error('UI injection failed', { error, targetId: targetContainer.id });
@@ -50,6 +74,9 @@ export async function injectUI(
 }
 
 export function cleanupUI() {
+    if (unwatchLang) { unwatchLang(); unwatchLang = null; }
     if (reactRoot) { reactRoot.unmount(); reactRoot = null; }
     if (mountContainer) { mountContainer.remove(); mountContainer = null; }
+    currentHistory = null;
+    currentHonesty = null;
 }

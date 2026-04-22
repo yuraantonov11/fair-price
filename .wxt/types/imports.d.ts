@@ -5,6 +5,7 @@ declare global {
   const HydrationParser: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/hydrationParser').HydrationParser
   const InvalidMatchPattern: typeof import('wxt/utils/match-patterns').InvalidMatchPattern
   const MatchPattern: typeof import('wxt/utils/match-patterns').MatchPattern
+  const SUPPORTED_LANGUAGES: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/i18n').SUPPORTED_LANGUAGES
   const browser: typeof import('wxt/browser').browser
   const createIframeUi: typeof import('wxt/utils/content-script-ui/iframe').createIframeUi
   const createIntegratedUi: typeof import('wxt/utils/content-script-ui/integrated').createIntegratedUi
@@ -18,12 +19,16 @@ declare global {
   const extractEntries: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/sitemapParser').extractEntries
   const fakeBrowser: typeof import('wxt/testing').fakeBrowser
   const getAppConfig: typeof import('wxt/utils/app-config').getAppConfig
+  const getLanguage: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/i18n').getLanguage
+  const i18n: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/i18n').default
+  const initLanguage: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/i18n').initLanguage
   const injectScript: typeof import('wxt/utils/inject-script').injectScript
   const isDniproMProduct: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/sitemapParser').isDniproMProduct
   const observeSPA: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/domUtils').observeSPA
   const parsePrice: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/domUtils').parsePrice
   const parseSitemap: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/sitemapParser').parseSitemap
   const scrapeProductPage: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/priceScraper').scrapeProductPage
+  const setLanguage: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/i18n').setLanguage
   const storage: typeof import('wxt/utils/storage').storage
   const supabase: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/supabaseClient').supabase
   const useAppConfig: typeof import('wxt/utils/app-config').useAppConfig
@@ -35,6 +40,7 @@ declare global {
   const useRef: typeof import('react').useRef
   const useState: typeof import('react').useState
   const waitForElement: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/domUtils').waitForElement
+  const watchLanguage: typeof import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/i18n').watchLanguage
 }
 // for type re-export
 declare global {
@@ -68,6 +74,9 @@ declare global {
   // @ts-ignore
   export type { HydrationParser } from 'C:/Users/yuraa/WebstormProjects/fair_price/src/utils/hydrationParser'
   import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/hydrationParser')
+  // @ts-ignore
+  export type { SupportedLanguage } from 'C:/Users/yuraa/WebstormProjects/fair_price/src/utils/i18n'
+  import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/i18n')
   // @ts-ignore
   export type { ScrapedProduct } from 'C:/Users/yuraa/WebstormProjects/fair_price/src/utils/priceScraper'
   import('C:/Users/yuraa/WebstormProjects/fair_price/src/utils/priceScraper')

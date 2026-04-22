@@ -52,7 +52,7 @@
    Copy-Item .env.example .env
    ```
 2. Заповніть `VITE_SUPABASE_URL` та `VITE_SUPABASE_ANON_KEY`.
-   - Домен Supabase уже дозволений у `host_permissions` (`*://*.supabase.co/*`).
+   - Домен Supabase вже дозволений у `host_permissions` (`*://*.supabase.co/*`).
 3. Для Firefox (опційно) задайте `WXT_FIREFOX_BINARY`, якщо шлях відрізняється від дефолтного в `wxt.config.ts`.
 4. За потреби змініть `WXT_START_URL` (за замовчуванням відкривається сторінка Dnipro-M товару при `npm run dev`).
 5. Для керування шумом логів задайте `VITE_LOG_LEVEL` (`debug` | `info` | `warn` | `error` | `silent`).
@@ -79,6 +79,30 @@ npm run verify:agent:crawl
 - Для VS Code/JetBrains Gateway додані запускні конфіги в `.vscode/launch.json` і задачі в `.vscode/tasks.json`.
 - Логи уніфіковані форматом: `[FairPrice][<scope>][<LEVEL>] message {context}`.
 - Для Supabase дивіться `code` у логу (`SUPABASE_CONFIG_ERROR`, `SUPABASE_SAVE_FAILED`, `SUPABASE_HISTORY_FAILED`) і стартовий probe в background.
+
+#### Тестовий режим графіка (кількість записів)
+
+На сторінці товару можна увімкнути мок-режим без зміни коду, просто через query-параметри URL:
+
+- `fp_test=1` - увімкнути режим
+- `fp_records=<0..30>` - скільки записів показати
+- `fp_scenario=flat|discount|spike|volatile|rising` - форма історії
+- `fp_price=<ціна>` - зафіксувати поточну ціну в UAH (опційно)
+
+Приклад:
+
+```text
+https://dnipro-m.ua/tovar/akumulyatorna-lancyugova-pila-dms-201bc/?fp_test=1&fp_records=2&fp_scenario=flat&fp_price=1599
+```
+
+Швидкі кейси:
+
+- `fp_records=1` -> картка "Є перша підтверджена ціна"
+- `fp_records=2` -> попередній аналіз (2/3)
+- `fp_records=3` і більше -> повний аналіз з індексом чесності
+- при `fp_test=1` у картці видно бейдж `TEST MODE`, щоб не сплутати з реальними даними
+
+Щоб повернутись до реальних даних, приберіть `fp_test=1` з URL.
 
 ### Тестування
 

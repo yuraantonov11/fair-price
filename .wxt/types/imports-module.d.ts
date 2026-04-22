@@ -20,6 +20,7 @@ declare module '#imports' {
   export { fakeBrowser } from 'wxt/testing';
   export { waitForElement, parsePrice, observeSPA } from '../src/utils/domUtils';
   export { HydrationParser, HydrationParser } from '../src/utils/hydrationParser';
+  export { default as i18n, SUPPORTED_LANGUAGES, initLanguage, setLanguage, getLanguage, watchLanguage, SupportedLanguage } from '../src/utils/i18n';
   export { createLogger } from '../src/utils/logger';
   export { scrapeProductPage, ScrapedProduct } from '../src/utils/priceScraper';
   export { parseSitemap, extractEntries, isDniproMProduct, SitemapEntry } from '../src/utils/sitemapParser';
