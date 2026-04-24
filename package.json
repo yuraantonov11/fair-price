@@ -1,7 +1,7 @@
 {
   "name": "fair-price-extension",
   "private": true,
-  "version": "1.2.2",
+  "version": "1.2.3",
   "type": "module",
   "scripts": {
     "setup": "npm ci",
@@ -53,3 +53,4 @@
     "wxt": "^0.20.20"
   }
 }
+

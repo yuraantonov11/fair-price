@@ -1,3 +1,9 @@
+## [1.2.3] - 2026-04-24
+
+### Fixed
+- DniproM: show price history widget for all prices (removed >300 UAH filter)
+- DniproM: insert chart widget after .product-buy-info (directly below price/buy button)
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
@@ -84,4 +90,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub Actions CI workflow (typecheck + tests + build + artifact upload)
 - Centralized logger (`createLogger`) with `check:logs` enforcement
 - `.env.example` with required environment variables documented
+
 
