@@ -19,20 +19,18 @@ export default defineConfig({
     short_name: "FairPrice",
     version,
     description: "Автоматичний моніторинг цін та перевірка реальності знижок в українських інтернет-магазинах.",
-    author: {
-      email: "yuraantonov11@gmail.com"
-    },
+    author: "Yurii Antonov <yuraantonov11@gmail.com>" as unknown as { email: string },
     icons: {
-      "16": "icons/icon_inactive.png",
-      "48": "icons/icon_inactive.png",
-      "128": "icons/icon_inactive.png"
+      "16": "icons/icon_inactive_16.png",
+      "48": "icons/icon_inactive_48.png",
+      "128": "icons/icon_inactive_128.png"
     },
     action: {
       default_title: "Чесна Ціна",
       default_icon: {
-        "16": "icons/icon_inactive.png",
-        "48": "icons/icon_inactive.png",
-        "128": "icons/icon_inactive.png"
+        "16": "icons/icon_inactive_16.png",
+        "48": "icons/icon_inactive_48.png",
+        "128": "icons/icon_inactive_128.png"
       }
     },
     permissions: [
@@ -46,7 +44,13 @@ export default defineConfig({
     browser_specific_settings: {
       gecko: {
         id: "fairprice@yuraantonov.com",
-        strict_min_version: "109.0"
+        strict_min_version: "142.0",
+        ...({
+          data_collection_permissions: {
+            required: ["none"],
+            optional: []
+          }
+        } as Record<string, unknown>)
       }
     }
   },

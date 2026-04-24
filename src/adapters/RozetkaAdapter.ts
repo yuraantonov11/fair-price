@@ -70,7 +70,11 @@ export class RozetkaAdapter implements IPriceAdapter {
     const jsonLd = document.querySelector('script[type="application/ld+json"]');
     if (jsonLd) {
       try {
-        const data = JSON.parse(jsonLd.innerHTML);
+        const jsonLdText = jsonLd.textContent?.trim();
+        if (!jsonLdText) {
+          throw new Error('Empty JSON-LD payload');
+        }
+        const data = JSON.parse(jsonLdText);
         const product = Array.isArray(data) ? data.find(i => i['@type'] === 'Product') : data;
 
         if (product) {
