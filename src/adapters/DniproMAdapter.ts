@@ -10,7 +10,11 @@ export class DniproMAdapter implements IPriceAdapter {
   isApplicable(): boolean { return window.location.hostname.includes('dnipro-m.ua'); }
   isProductPage(): boolean { return window.location.pathname.includes('/tovar/'); }
   isCatalogPage(): boolean { return !this.isProductPage() && document.querySelector('.catalog-list') !== null; }
-  getUIAnchor(): Element | null { return document.querySelector('h1'); }
+  getUIAnchor(): Element | null {
+    return document.querySelector('.product-code') ||
+        document.querySelector('.product-reviews') ||
+        document.querySelector('h1');
+  }
   getUIInsertMethod(): ContentScriptAppendMode { return 'after'; }
 
   getHydrationData(): any | null {
