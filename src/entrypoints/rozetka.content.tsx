@@ -23,7 +23,7 @@ export default defineContentScript({
         honestyScore: HonestyResult
     ) => {
       // Якщо контейнер новий (після відновлення SPA), створюємо новий React Root.
-      // Зберігаємо екземпляр root прямо в DOM-елементі, щоб не плутати старі і нові контейнери.
+      // Зберігаємо екземпляр root прямо в DOM-елементі, щоб не плутати старі й нові контейнери.
       let root = (container as any)._reactRoot;
 
       if (!root) {
@@ -32,9 +32,7 @@ export default defineContentScript({
       }
 
       root.render(
-          <div className="fair-price-app w-full block">
-            <PriceChart data={history} honesty={honestyScore} />
-          </div>
+          <PriceChart data={history} honesty={honestyScore} store="rozetka" />
       );
     };
 

@@ -20,7 +20,7 @@ export default defineContentScript({
 
     // Замість ручного createRoot, просто викликаємо нашу функцію з injector.tsx
     const renderReactUI = (container: HTMLElement, history: any[], honestyScore: HonestyResult) => {
-      injectUI(container, history, honestyScore);
+      injectUI(container, history, honestyScore, 'dniprom');
     };
 
     const controller = new ExtensionController(adapter, renderReactUI);

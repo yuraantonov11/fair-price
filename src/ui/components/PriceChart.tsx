@@ -260,11 +260,16 @@ const TestModeBadge = () => (
   </div>
 );
 
-export const PriceChart = ({ data, honesty }: PriceChartProps) => {
+export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(0);
   const isTestMode = Boolean(honesty.details?.isTestMode);
+  const themed = (content: React.ReactNode) => (
+    <div className="fair-price-app w-full block" data-store={store}>
+      {content}
+    </div>
+  );
   const withTestBadge = (content: React.ReactNode) => (
     <div className="relative">
       {isTestMode && <TestModeBadge />}
@@ -288,7 +293,7 @@ export const PriceChart = ({ data, honesty }: PriceChartProps) => {
   }, []);
 
   if (!data || data.length === 0) {
-    return withTestBadge(<div className="p-4 rounded-2xl bg-slate-900/90 text-slate-400 text-xs text-center">{t('chart.notEnoughData')}</div>);
+    return themed(withTestBadge(<div className="p-4 rounded-2xl bg-slate-900/90 text-slate-400 text-xs text-center">{t('chart.notEnoughData')}</div>));
   }
 
   const normalizedData = data
@@ -298,29 +303,29 @@ export const PriceChart = ({ data, honesty }: PriceChartProps) => {
 
   if (honesty.state === 'single-price' && normalizedData.length >= 1) {
     const observedPoint = normalizedData[0];
-    return withTestBadge(
+    return themed(withTestBadge(
         <SinglePriceCard
             message={translatedMessage}
             observedPrice={honesty.details?.observedPrice ?? observedPoint.price}
             firstSeenAt={honesty.details?.firstSeenAt ?? observedPoint.timestamp}
             daysAtObservedPrice={honesty.details?.daysAtObservedPrice}
         />
-    );
+    ));
   }
 
   if (honesty.score === -1 && honesty.state === 'collecting' && normalizedData.length >= 2) {
-    return withTestBadge(
+    return themed(withTestBadge(
         <PreviewCollectingCard
             count={normalizedData.length}
             message={translatedMessage}
             observedPrices={honesty.details?.observedPrices}
             currentPrice={normalizedData[normalizedData.length - 1]?.price}
         />
-    );
+    ));
   }
 
   if (honesty.score === -1 && normalizedData.length < 3) {
-    return withTestBadge(<CollectingCard count={normalizedData.length} message={translatedMessage} />);
+    return themed(withTestBadge(<CollectingCard count={normalizedData.length} message={translatedMessage} />));
   }
 
   const groupedByDay = normalizedData.reduce((acc, item) => {
@@ -339,7 +344,7 @@ export const PriceChart = ({ data, honesty }: PriceChartProps) => {
   const chartData = Object.values(groupedByDay).sort((a: any, b: any) => a.timestamp - b.timestamp).slice(-14);
   const colors = scoreColor(honesty.score);
 
-  return withTestBadge(
+  return themed(withTestBadge(
       <div className="flex flex-col gap-3 bg-linear-to-br from-slate-900/95 to-slate-800/95 rounded-2xl border border-white/5 p-4 shadow-xl font-sans">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
@@ -417,6 +422,6 @@ export const PriceChart = ({ data, honesty }: PriceChartProps) => {
           {honesty.score !== -1 && <ScoreRing score={honesty.score} />}
         </div>
       </div>
-  );
+  ));
 };
 

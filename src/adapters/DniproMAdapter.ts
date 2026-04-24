@@ -11,8 +11,20 @@ export class DniproMAdapter implements IPriceAdapter {
   isProductPage(): boolean { return window.location.pathname.includes('/tovar/'); }
   isCatalogPage(): boolean { return !this.isProductPage() && document.querySelector('.catalog-list') !== null; }
   getUIAnchor(): Element | null {
+    // Prefer the rating/reviews + SKU meta block so widget appears lower near the price section.
+    const skuTextNode = Array.from(document.querySelectorAll('span, div'))
+      .find((el) => {
+        const text = el.textContent?.replace(/\s+/g, ' ').trim() || '';
+        return text.includes('Код товару') && text.length <= 140;
+      });
+
+    const skuBlock = skuTextNode?.closest('div');
+    if (skuBlock) return skuBlock;
+
     return document.querySelector('.product-code') ||
         document.querySelector('.product-reviews') ||
+        document.querySelector('[itemprop="sku"]')?.closest('div') ||
+        document.querySelector('.product-card__rating')?.closest('div') ||
         document.querySelector('h1');
   }
   getUIInsertMethod(): ContentScriptAppendMode { return 'after'; }

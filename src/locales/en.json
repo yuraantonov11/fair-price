@@ -76,11 +76,14 @@
     },
     "status": {
       "currentSite": "Current site",
+      "supported": "Supported",
+      "limited": "Limited",
       "unsupported": "We don't monitor this store yet",
       "suggestSite": "Suggest this site"
     },
     "feedback": {
       "prompt": "Found a bug or want to add a new store?",
+      "alwaysOn": "Always on",
       "placeholder": "Describe the issue or enter the store name...",
       "reportBug": "REPORT BUG",
       "addSite": "ADD SITE",

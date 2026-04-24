@@ -13,6 +13,7 @@ let reactRoot: Root | null = null;
 let mountContainer: HTMLElement | null = null;
 let currentHistory: any[] | null = null;
 let currentHonesty: HonestyResult | null = null;
+let currentStore: string | undefined = undefined;
 let unwatchLang: (() => void) | null = null;
 
 const HOST_RESET = `
@@ -28,7 +29,7 @@ function renderChart() {
   if (!reactRoot || !currentHistory || !currentHonesty) return;
   reactRoot.render(
     <I18nextProvider i18n={i18nInstance}>
-      <PriceChart data={currentHistory} honesty={currentHonesty} />
+      <PriceChart data={currentHistory} honesty={currentHonesty} store={currentStore} />
     </I18nextProvider>
   );
 }
@@ -36,7 +37,8 @@ function renderChart() {
 export async function injectUI(
     targetContainer: HTMLElement,
     history: any[],
-    honesty: HonestyResult
+    honesty: HonestyResult,
+    store?: string
 ) {
     try {
         cleanupUI();
@@ -46,6 +48,7 @@ export async function injectUI(
 
         currentHistory = history;
         currentHonesty = honesty;
+        currentStore = store;
 
         mountContainer = document.createElement('div');
         mountContainer.id = 'fair-price-shadow-host';
@@ -79,4 +82,5 @@ export function cleanupUI() {
     if (mountContainer) { mountContainer.remove(); mountContainer = null; }
     currentHistory = null;
     currentHonesty = null;
+    currentStore = undefined;
 }

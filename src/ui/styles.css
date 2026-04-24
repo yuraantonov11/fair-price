@@ -1,7 +1,4 @@
-/* Спочатку імпорт шрифтів */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
-
-/* Потім Tailwind */
 @import "tailwindcss";
 
 *, *::before, *::after {
@@ -9,11 +6,152 @@
 }
 
 .fair-price-app {
+  --fp-background: 222 45% 7%;
+  --fp-foreground: 210 33% 96%;
+  --fp-surface: 223 38% 12%;
+  --fp-panel: 223 36% 15%;
+  --fp-panel-muted: 223 31% 11%;
+  --fp-muted: 215 14% 72%;
+  --fp-muted-strong: 214 26% 86%;
+  --fp-border: 223 26% 27%;
+  --fp-primary: 192 92% 50%;
+  --fp-accent: 278 84% 66%;
+  --fp-success: 153 64% 44%;
+  --fp-warning: 42 95% 58%;
+  --fp-danger: 0 80% 61%;
+  --fp-info: 204 88% 58%;
+  --fp-radius: 14px;
+  --fp-shadow-soft: 0 18px 48px -26px hsl(222 65% 2% / 0.75);
+  --fp-shadow-panel: 0 24px 80px -30px hsl(222 69% 2% / 0.95);
+  --fp-shadow-glow: 0 0 0 1px hsl(var(--fp-primary) / 0.25), 0 0 38px hsl(var(--fp-primary) / 0.28);
+  --fp-gradient-panel: linear-gradient(150deg, hsl(var(--fp-panel) / 0.94), hsl(var(--fp-panel-muted) / 0.96));
+  --fp-gradient-hero:
+    radial-gradient(circle at 15% 20%, hsl(var(--fp-primary) / 0.18), transparent 35%),
+    radial-gradient(circle at 78% 15%, hsl(var(--fp-accent) / 0.2), transparent 30%),
+    linear-gradient(165deg, hsl(222 44% 8%) 0%, hsl(223 40% 10%) 55%, hsl(225 37% 11%) 100%);
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   color-scheme: dark;
+  color: hsl(var(--fp-foreground));
+  background-image: var(--fp-gradient-hero);
 }
 
 .fair-price-app p {
   margin: 0;
+}
+
+.fair-price-app .fp-card {
+  border: 1px solid hsl(var(--fp-border) / 0.85);
+  border-radius: var(--fp-radius);
+  background: var(--fp-gradient-panel);
+  box-shadow: var(--fp-shadow-panel);
+}
+
+.fair-price-app .fp-glass {
+  border: 1px solid hsl(var(--fp-border) / 0.75);
+  border-radius: 12px;
+  background: hsl(var(--fp-surface) / 0.72);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--fp-shadow-soft);
+}
+
+.fair-price-app .fp-soft {
+  border: 1px solid hsl(var(--fp-border) / 0.5);
+  border-radius: 12px;
+  background: hsl(var(--fp-background) / 0.32);
+}
+
+.fair-price-app .fp-chip {
+  border: 1px solid hsl(var(--fp-border) / 0.7);
+  border-radius: 9999px;
+  padding: 4px 9px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.fair-price-app .fp-muted {
+  color: hsl(var(--fp-muted));
+}
+
+.fair-price-app .fp-title {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: hsl(var(--fp-muted));
+}
+
+.fair-price-app .fp-kpi {
+  border: 1px solid hsl(var(--fp-border) / 0.7);
+  border-radius: 12px;
+  background: hsl(var(--fp-panel) / 0.65);
+  padding: 10px;
+}
+
+.fair-price-app .fp-kpi-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: hsl(var(--fp-muted));
+}
+
+.fair-price-app .fp-kpi-value {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 800;
+  color: hsl(var(--fp-foreground));
+}
+
+.fair-price-app .fp-glow {
+  box-shadow: var(--fp-shadow-glow);
+}
+
+/* ── Store: Dnipro-M ─────────────────────────────────────────── */
+.fair-price-app[data-store="dniprom"] {
+  /* Tokens mapped from dnipro-m.ua CSS bundles (app/styles/styles-critical). */
+  --fp-background: 240 12% 8%;      /* #141419 */
+  --fp-foreground: 0 0% 91%;        /* #e7e7e7 */
+  --fp-surface: 0 0% 20%;           /* #333333 */
+  --fp-panel: 0 0% 20%;             /* #333333 */
+  --fp-panel-muted: 0 0% 14%;       /* ~between #141419 and #333 */
+  --fp-muted: 0 0% 56%;             /* #909090 */
+  --fp-muted-strong: 0 0% 91%;      /* #e7e7e7 */
+  --fp-border: 0 0% 36%;            /* based on #909090/#666 */
+  --fp-primary: 11 100% 50%;        /* #ff2f00 */
+  --fp-accent: 15 88% 48%;          /* #e74610 */
+  --fp-success: 126 49% 42%;        /* #359d3f */
+  --fp-warning: 47 100% 50%;        /* #ffc700 */
+  --fp-danger: 9 84% 45%;           /* #d72700 */
+  --fp-shadow-glow: 0 0 0 1px hsl(11 100% 50% / 0.3), 0 0 32px hsl(11 100% 50% / 0.22);
+  --fp-gradient-panel: linear-gradient(150deg, hsl(0 0% 20% / 0.96), hsl(240 12% 8% / 0.98));
+  --fp-gradient-hero:
+    radial-gradient(circle at 15% 20%, hsl(11 100% 50% / 0.14), transparent 35%),
+    radial-gradient(circle at 80% 10%, hsl(15 88% 48% / 0.12), transparent 30%),
+    linear-gradient(165deg, hsl(240 12% 8%) 0%, hsl(0 0% 20%) 100%);
+}
+
+/* Score ring stroke override for Dnipro-M: inherits via JS scoreColor fallback,
+   but primary chip and progress use CSS var */
+.fair-price-app[data-store="dniprom"] .fp-progress {
+  background: linear-gradient(90deg, #ff2f00, #e74610);
+}
+
+/* Blue is reserved only for links in Dnipro-M theme (site color #3e77aa). */
+.fair-price-app[data-store="dniprom"] a,
+.fair-price-app[data-store="dniprom"] a:visited {
+  color: #3e77aa;
+}
+
+.fair-price-app[data-store="dniprom"] a:hover,
+.fair-price-app[data-store="dniprom"] a:focus-visible {
+  color: #5897fb;
+}
+
+/* ── Store: Rozetka (placeholder for future) ─────────────────── */
+.fair-price-app[data-store="rozetka"] {
+  --fp-primary: 148 59% 40%;
+  --fp-accent: 148 59% 55%;
+  --fp-shadow-glow: 0 0 0 1px hsl(148 59% 40% / 0.25), 0 0 32px hsl(148 59% 40% / 0.2);
 }

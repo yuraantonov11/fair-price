@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.1] - 2026-04-24
+
+### Changed
+- Restored compact redesign rendering across all `PriceChart` states by applying store-scoped theme wrapper consistently.
+- Updated Dnipro-M UI injection anchor to place the chart lower, after the product metadata block near rating/reviews and SKU.
+- Synced `dniprom` theme tokens with colors used on `dnipro-m.ua` CSS bundles.
+- Kept blue color reserved for links in `dniprom` theme; chart/UI accents now use brand red/orange tokens.
+
+### Fixed
+- `TS2322` prop mismatch around `store` by aligning `PriceChart` usage in content/injector rendering paths.
+- Prevented store theme leakage on reinjection by resetting `currentStore` during UI cleanup.
+
 ## [1.2.0] - 2026-04-22
 
 ### Added
