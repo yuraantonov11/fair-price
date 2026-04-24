@@ -16,6 +16,7 @@ type PriceHistory = {
 interface PriceChartProps {
   data: PriceHistory[];
   honesty: HonestyResult;
+  store?: string;
 }
 
 const DEFAULT_CHART_LOCALE = 'en-US';
@@ -207,10 +208,10 @@ const SinglePriceCard = ({
     <div className="bg-linear-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-5 flex flex-col gap-4 shadow-xl font-sans">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="w-2.5 h-2.5 rounded-full bg-sky-400 animate-pulse" />
+          <div className="w-2.5 h-2.5 rounded-full bg-slate-400 animate-pulse" />
           <span className="text-[11px] uppercase tracking-widest text-slate-400 font-bold">{t('chart.singlePrice.title')}</span>
         </div>
-        <span className="text-xs text-sky-300 font-black px-2 py-1 bg-sky-400/10 rounded-md">{t('chart.singlePrice.counter')}</span>
+        <span className="text-xs text-slate-300 font-black px-2 py-1 bg-slate-400/10 rounded-md">{t('chart.singlePrice.counter')}</span>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -220,7 +221,7 @@ const SinglePriceCard = ({
         </div>
         <div className="rounded-xl border border-white/5 bg-white/3 px-3 py-3">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.singlePrice.heldFor')}</div>
-          <div className="mt-1 text-lg font-black text-sky-300">{daysLabel}</div>
+          <div className="mt-1 text-lg font-black text-slate-300">{daysLabel}</div>
         </div>
         <div className="rounded-xl border border-white/5 bg-white/3 px-3 py-3">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.singlePrice.firstSeen')}</div>
@@ -228,7 +229,7 @@ const SinglePriceCard = ({
         </div>
       </div>
 
-      <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/20 text-sm text-slate-200 leading-relaxed">{message}</div>
+      <div className="p-3 rounded-xl bg-slate-700/50 border border-slate-600/50 text-sm text-slate-200 leading-relaxed">{message}</div>
       <p className="text-xs text-slate-400 leading-relaxed">{t('chart.singlePrice.footer')}</p>
     </div>
   );
