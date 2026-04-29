@@ -10,6 +10,7 @@ const logger = createLogger('background', { runtime: 'background' });
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const BASELINE_API_URL = import.meta.env.VITE_BASELINE_API_URL;
+const TELEGRAM_ALERTS_ENABLED = import.meta.env.VITE_TELEGRAM_ALERTS_ENABLED === 'true';
 
 // SPA debounce: prevent duplicate GET_HISTORY calls within 500ms per tab
 const lastHistoryCallTs = new Map<number, number>();
@@ -243,6 +244,10 @@ export default defineBackground(() => {
 
       const userKey = await getUserKey();
       const { url, targetPrice, channel = 'browser' } = msg.payload;
+      const requestedChannel = channel;
+      const effectiveChannel = requestedChannel === 'telegram' && !TELEGRAM_ALERTS_ENABLED
+        ? 'browser'
+        : requestedChannel;
 
       // Resolve product_id from URL
       const { data: products, error: productError } = await supabase
@@ -256,12 +261,19 @@ export default defineBackground(() => {
         user_key: userKey,
         product_id: products[0].id,
         target_price: Math.round(targetPrice * 100), // UAH → kopecks
-        channel,
+        channel: effectiveChannel,
         is_active: true,
       });
       if (error) throw error;
-      logger.info('Alert saved', { url, targetPrice, channel });
-      return { success: true };
+      logger.info('Alert saved', { url, targetPrice, requestedChannel, effectiveChannel });
+      return {
+        success: true,
+        data: {
+          requestedChannel,
+          effectiveChannel,
+          fallbackApplied: requestedChannel !== effectiveChannel,
+        },
+      };
     } catch (error: any) {
       logger.error('Failed to save alert', { error, url: msg?.payload?.url });
       return { success: false, error: getErrorMessage(error), code: 'ALERT_SAVE_FAILED' };

@@ -12,8 +12,10 @@ const AlertsTab = ({ currentUrl, isSupportedStore }: { currentUrl: string; isSup
     const { t } = useTranslation();
     const [alerts, setAlerts] = useState<PriceAlert[]>([]);
     const [targetPrice, setTargetPrice] = useState('');
+    const [channel, setChannel] = useState<'browser' | 'telegram'>('browser');
     const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState('');
+    const [fallbackNote, setFallbackNote] = useState('');
 
     const loadAlerts = () => {
         if (!currentUrl || !isSupportedStore) return;
@@ -27,14 +29,18 @@ const AlertsTab = ({ currentUrl, isSupportedStore }: { currentUrl: string; isSup
         const price = parseFloat(targetPrice);
         if (!price || price <= 0) return;
         setStatus('saving');
+        setFallbackNote('');
         const res: any = await browser.runtime.sendMessage({
             type: 'SAVE_ALERT',
-            payload: { url: currentUrl, targetPrice: price, channel: 'browser' },
+            payload: { url: currentUrl, targetPrice: price, channel },
         });
         if (res?.success) {
             setStatus('saved');
             setTargetPrice('');
             loadAlerts();
+            if (res?.data?.fallbackApplied) {
+                setFallbackNote(t('popup.alerts.telegramFallback'));
+            }
             setTimeout(() => setStatus('idle'), 2500);
         } else {
             setStatus('error');
@@ -60,6 +66,18 @@ const AlertsTab = ({ currentUrl, isSupportedStore }: { currentUrl: string; isSup
             <div className="fp-glass p-3">
                 <p className="fp-title mb-1">{t('popup.alerts.title')}</p>
                 <p className="text-[10px] text-slate-400 mb-2">{t('popup.alerts.subtitle')}</p>
+                <div className="flex gap-2 mb-2">
+                    <select
+                        value={channel}
+                        onChange={e => setChannel(e.target.value as 'browser' | 'telegram')}
+                        className="bg-slate-900/80 border border-white/12 rounded-lg px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-cyan-400"
+                    >
+                        <option value="browser">{t('popup.alerts.channelBrowser')}</option>
+                        <option value="telegram">{t('popup.alerts.channelTelegram')}</option>
+                    </select>
+                    <span className="text-[10px] text-slate-500 self-center">{t('popup.alerts.channelLabel')}</span>
+                </div>
+
                 <div className="flex gap-2">
                     <input
                         type="number"
@@ -78,6 +96,7 @@ const AlertsTab = ({ currentUrl, isSupportedStore }: { currentUrl: string; isSup
                     </button>
                 </div>
                 {status === 'saved' && <p className="text-[10px] text-emerald-400 mt-1.5">{t('popup.alerts.saved')}</p>}
+                {fallbackNote && <p className="text-[10px] text-amber-300 mt-1.5">{fallbackNote}</p>}
                 {status === 'error' && <p className="text-[10px] text-rose-400 mt-1.5">{t('popup.alerts.error', { msg: errorMsg })}</p>}
             </div>
 
@@ -86,7 +105,11 @@ const AlertsTab = ({ currentUrl, isSupportedStore }: { currentUrl: string; isSup
                     <p className="fp-title mb-1">{t('popup.alerts.activeAlerts')}</p>
                     {alerts.map(a => (
                         <div key={a.id} className="flex items-center justify-between bg-slate-800/60 rounded-lg px-2.5 py-1.5">
-                            <span className="text-xs text-slate-200">{t('popup.alerts.below', { price: a.targetPrice })}</span>
+                            <span className="text-xs text-slate-200">
+                                {t('popup.alerts.below', { price: a.targetPrice })}
+                                {' · '}
+                                {a.channel === 'telegram' ? t('popup.alerts.channelTelegram') : t('popup.alerts.channelBrowser')}
+                            </span>
                             <button
                                 onClick={() => deleteAlert(a.id)}
                                 className="text-[10px] text-slate-400 hover:text-rose-400 font-bold ml-2 transition-colors"
