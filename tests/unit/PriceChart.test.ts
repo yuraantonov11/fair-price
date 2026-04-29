@@ -1,6 +1,6 @@
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it, vi, beforeAll } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PriceChart } from '@/ui/components/PriceChart';
 import type { HonestyResult } from '@/types/honesty';
 
@@ -137,6 +137,44 @@ describe('PriceChart', () => {
     expect(html).toContain('chart.stats.max90');
     expect(html).toContain('chart.trend.falling');
     expect(html).toContain('chart.score.label');
+  });
+
+  it('renders baseline delta chip and hint for analyzed state', () => {
+    const data = [
+      { price: 2500, date: '2026-03-01' },
+      { price: 2450, date: '2026-03-10' },
+      { price: 2400, date: '2026-03-20' },
+      { price: 2300, date: '2026-04-01' },
+      { price: 2200, date: '2026-04-10' },
+    ];
+    const honesty = makeHonesty({
+      score: 74,
+      state: 'analyzed',
+      messageKey: 'calculator.goodDeal',
+      messageParams: { pct: 10 },
+      reasonCodes: ['PRICE_NEAR_MIN30'],
+      metrics: {
+        median60: 2400,
+        min30: 2200,
+        spike14Pct: 0,
+        penalty: 0,
+      },
+      details: {
+        entryCount: 5,
+        min30: 2200,
+        median60: 2400,
+        priceVsMedianPct: -8,
+        trend: 'falling',
+        isVolatile: false,
+        hasSpike: false,
+      },
+    });
+
+    const html = renderChart(data, honesty);
+    expect(html).toContain('chart.reasonCodes.PRICE_NEAR_MIN30');
+    expect(html).toContain('↓8%');
+    expect(html).toContain('chart.baselineDelta.label');
+    expect(html).toContain('title="chart.baselineDelta.belowHint"');
   });
 
   it('shows TEST MODE badge when test mode flag is enabled', () => {

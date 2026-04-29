@@ -74,6 +74,33 @@ const ReasonChips = ({ codes }: { codes: string[] }) => {
   );
 };
 
+/** Baseline-delta chip — shows Δ% vs median-60d baseline with a hover hint */
+const BaselineDeltaChip = ({ pct, baselineValue }: { pct: number; baselineValue?: number }) => {
+  const { t } = useTranslation();
+  if (pct === 0) return null;
+  const isBelow = pct < 0;
+  const abs = Math.abs(pct);
+  const sign = isBelow ? '↓' : '↑';
+  const chipCls = isBelow
+    ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-200'
+    : abs > 15
+      ? 'bg-rose-500/15 border-rose-500/30 text-rose-200'
+      : 'bg-amber-500/15 border-amber-500/30 text-amber-200';
+  const baselineStr = baselineValue ? `${Math.round(baselineValue)} ₴` : '';
+  const hintKey = isBelow ? 'chart.baselineDelta.belowHint' : 'chart.baselineDelta.aboveHint';
+  const hint = t(hintKey, { pct: abs, baseline: baselineStr });
+
+  return (
+    <span
+      title={hint}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-semibold leading-none cursor-help ${chipCls}`}
+    >
+      <span>📊</span>
+      <span>{sign}{abs}% {t('chart.baselineDelta.label')}</span>
+    </span>
+  );
+};
+
 function verdictCls(verdict?: HonestyVerdict): string {
   if (verdict === 'fair')    return 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300';
   if (verdict === 'risky')   return 'bg-rose-500/15 border-rose-500/30 text-rose-300';
@@ -442,6 +469,15 @@ export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
 
         {honesty.reasonCodes && honesty.reasonCodes.length > 0 && (
           <ReasonChips codes={honesty.reasonCodes} />
+        )}
+
+        {honesty.details?.priceVsMedianPct != null && honesty.state === 'analyzed' && (
+          <div className="flex flex-wrap gap-1.5">
+            <BaselineDeltaChip
+              pct={honesty.details.priceVsMedianPct}
+              baselineValue={honesty.metrics?.median60 ?? honesty.details?.median60}
+            />
+          </div>
         )}
 
         <div className="w-full h-45 mt-1 relative" ref={containerRef}>

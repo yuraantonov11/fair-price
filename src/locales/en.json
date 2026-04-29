@@ -45,6 +45,11 @@
       "community": "Community",
       "system": "Auto-monitor"
     },
+    "baselineDelta": {
+      "label": "vs median·60d",
+      "belowHint": "Current price is {{pct}}% below the 60-day median baseline ({{baseline}}). Baseline = typical price level without manipulation.",
+      "aboveHint": "Current price is {{pct}}% above the 60-day median baseline ({{baseline}}). Baseline = typical price level without manipulation."
+    },
     "tooltip": {
       "regularPrice": "Regular price"
     },
