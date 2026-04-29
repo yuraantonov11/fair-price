@@ -3,6 +3,7 @@ import { HonestyCalculator, HonestyResult } from './HonestyCalculator';
 import { MessageRouter } from "@/core/MessageRouter";
 import { createLogger } from '@/utils/logger';
 import { resolveChartTestMode } from '@/core/chartTestMode';
+import { isMountMissing, isMountOutOfPlace, placeMountNearAnchor } from '@/core/spaReinjectHelper';
 
 export class ExtensionController {
     private adapter: IPriceAdapter;
@@ -47,7 +48,7 @@ export class ExtensionController {
                 this.scheduleProcessPage(500);
             } else if (this.adapter.isProductPage() && this.cachedHistory && this.cachedHonestyScore && !this.isProcessing) {
                 const anchor = this.adapter.getUIAnchor();
-                if (anchor && (this.isMountMissing() || this.isMountOutOfPlace(anchor))) {
+                if (anchor && (isMountMissing(this.mountPoint) || isMountOutOfPlace(this.mountPoint, anchor, this.adapter.getUIInsertMethod()))) {
                     this.scheduleRestoreFromCache();
                 }
             }
@@ -83,19 +84,6 @@ export class ExtensionController {
         }, delay);
     }
 
-    private isMountMissing() {
-        return !this.mountPoint || !document.contains(this.mountPoint);
-    }
-
-    private isMountOutOfPlace(anchor: Element) {
-        if (!this.mountPoint || !document.contains(this.mountPoint)) return true;
-        const insertMethod = this.adapter.getUIInsertMethod();
-        if (insertMethod === 'after') {
-            return this.mountPoint.parentNode !== anchor.parentNode || this.mountPoint.previousSibling !== anchor;
-        }
-        return this.mountPoint.parentNode !== anchor;
-    }
-
     private scheduleRestoreFromCache() {
         if (this.restoreTimer) return;
         this.restoreTimer = window.setTimeout(() => {
@@ -104,7 +92,7 @@ export class ExtensionController {
             const anchor = this.adapter.getUIAnchor();
             if (!anchor) return;
             this.logger.info('UI mount missing or displaced, restoring from cache', { url: this.currentUrl });
-            if (this.isMountMissing()) {
+            if (isMountMissing(this.mountPoint)) {
                 this.mountPoint = null;
             }
             void this.injectUI(this.cachedHistory, this.cachedHonestyScore);
@@ -233,24 +221,23 @@ export class ExtensionController {
     private async injectUI(history: any[], honestyScore: HonestyResult) {
         const anchor = this.adapter.getUIAnchor();
         if (!anchor) return;
+        const insertMethod = this.adapter.getUIInsertMethod();
 
         // Перевіряємо, чи контейнер відсутній фізично в DOM
-        if (!this.mountPoint || !document.contains(this.mountPoint)) {
+        if (isMountMissing(this.mountPoint)) {
             this.mountPoint = document.createElement('div');
             this.mountPoint.id = 'fair-price-container';
             // Додані відступи (my-4) та очищення обтікання, щоб макет магазину не "наїжджав" на графік
             this.mountPoint.className = 'w-full my-4 z-[999] block clear-both';
         }
 
-        const insertMethod = this.adapter.getUIInsertMethod();
-        if (insertMethod === 'after') {
-            if (this.mountPoint.parentNode !== anchor.parentNode || this.mountPoint.previousSibling !== anchor) {
-                anchor.parentNode?.insertBefore(this.mountPoint, anchor.nextSibling);
-            }
-        } else if (this.mountPoint.parentNode !== anchor) {
-            anchor.appendChild(this.mountPoint);
+        const mountPoint = this.mountPoint;
+        if (!mountPoint) return;
+
+        if (isMountOutOfPlace(mountPoint, anchor, insertMethod)) {
+            placeMountNearAnchor({ mountPoint, anchor, insertMethod });
         }
 
-        this.renderUI(this.mountPoint, history, honestyScore);
+        this.renderUI(mountPoint, history, honestyScore);
     }
 }
