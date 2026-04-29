@@ -86,9 +86,15 @@ npm run dev
 ```bash
 npm run typecheck          # Перевірка типів
 npm run test               # Unit-тести
-npm test:e2e               # E2E-тести (Playwright)
+npm run test:e2e           # E2E-тести (Playwright)
+npm run test:e2e:smoke     # Build + extension smoke для Dnipro-M / Rozetka
 npm run ci:check           # Повна перевірка
 ```
+
+### 6️⃣ Smoke-регресія інʼєкції віджета
+- `tests/e2e/smoke.spec.ts` запускає Chrome/Chromium з реально завантаженим extension build
+- Dnipro-M: перевіряє інʼєкцію віджета + відновлення після видалення контейнера
+- Rozetka: перевіряє інʼєкцію через той самий shared injector path
 
 ---
 

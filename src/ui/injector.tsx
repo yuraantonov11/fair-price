@@ -11,6 +11,7 @@ const logger = createLogger('injector', { runtime: 'content', area: 'ui' });
 
 let reactRoot: Root | null = null;
 let mountContainer: HTMLElement | null = null;
+let reactContainer: HTMLElement | null = null;
 let currentHistory: any[] | null = null;
 let currentHonesty: HonestyResult | null = null;
 let currentStore: string | undefined = undefined;
@@ -41,35 +42,48 @@ export async function injectUI(
     store?: string
 ) {
     try {
-        cleanupUI();
+        const targetChanged = mountContainer !== targetContainer;
+        if (targetChanged && mountContainer) {
+            cleanupUI();
+        }
 
         // Load persisted language before first render
         await initLanguage();
 
+        mountContainer = targetContainer;
         currentHistory = history;
         currentHonesty = honesty;
         currentStore = store;
 
-        mountContainer = document.createElement('div');
-        mountContainer.id = 'fair-price-shadow-host';
-        mountContainer.style.cssText = 'width: 100%; margin-top: 20px; display: block;';
+        mountContainer.id = 'fair-price-container';
+        mountContainer.style.cssText = 'width: 100%; display: block;';
 
-        targetContainer.parentNode?.insertBefore(mountContainer, targetContainer.nextSibling);
+        const shadowRoot = mountContainer.shadowRoot ?? mountContainer.attachShadow({ mode: 'open' });
 
-        const shadowRoot = mountContainer.attachShadow({ mode: 'open' });
+        let styleTag = shadowRoot.querySelector('style[data-fp-style]') as HTMLStyleElement | null;
+        if (!styleTag) {
+            styleTag = document.createElement('style');
+            styleTag.dataset.fpStyle = 'true';
+            styleTag.textContent = HOST_RESET + tailwindStyles;
+            shadowRoot.appendChild(styleTag);
+        }
 
-        const styleTag = document.createElement('style');
-        styleTag.textContent = HOST_RESET + tailwindStyles;
-        shadowRoot.appendChild(styleTag);
+        reactContainer = shadowRoot.querySelector('[data-fp-react-root]') as HTMLElement | null;
+        if (!reactContainer) {
+            reactContainer = document.createElement('div');
+            reactContainer.dataset.fpReactRoot = 'true';
+            shadowRoot.appendChild(reactContainer);
+        }
 
-        const reactContainer = document.createElement('div');
-        shadowRoot.appendChild(reactContainer);
-
-        reactRoot = createRoot(reactContainer);
+        if (!reactRoot) {
+            reactRoot = createRoot(reactContainer);
+        }
         renderChart();
 
         // Live language switch: re-render whenever popup changes the language
-        unwatchLang = watchLanguage(() => renderChart());
+        if (!unwatchLang) {
+            unwatchLang = watchLanguage(() => renderChart());
+        }
 
     } catch (error) {
         logger.error('UI injection failed', { error, targetId: targetContainer.id });
@@ -79,8 +93,9 @@ export async function injectUI(
 export function cleanupUI() {
     if (unwatchLang) { unwatchLang(); unwatchLang = null; }
     if (reactRoot) { reactRoot.unmount(); reactRoot = null; }
-    if (mountContainer) { mountContainer.remove(); mountContainer = null; }
+    if (reactContainer) { reactContainer.remove(); reactContainer = null; }
     currentHistory = null;
     currentHonesty = null;
     currentStore = undefined;
+    mountContainer = null;
 }

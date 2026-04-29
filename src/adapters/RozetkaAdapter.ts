@@ -1,5 +1,5 @@
 import { IPriceAdapter, ProductData } from './IPriceAdapter';
-import { waitForElement, parsePrice } from '@/utils/domUtils';
+import { waitForAnyElement, parsePrice, queryFirst } from '@/utils/domUtils';
 import {ContentScriptAppendMode} from "wxt/utils/content-script-ui/types";
 import { createLogger } from '@/utils/logger';
 
@@ -13,7 +13,14 @@ export class RozetkaAdapter implements IPriceAdapter {
   isCatalogPage(): boolean { return !this.isProductPage() && document.querySelector('.catalog-list, .products-list') !== null; }
 
   getUIAnchor(): Element | null {
-    return document.querySelector('.product-trade') || document.querySelector('.product-about__right');
+    return queryFirst([
+      '.product-trade',
+      '.product-about__right',
+      '.product-main',
+      '[data-testid="product-trade"]',
+      '[data-testid="sidebar"]',
+      '.product__content',
+    ]);
   }
 
   getUIInsertMethod(): ContentScriptAppendMode{
@@ -40,18 +47,31 @@ export class RozetkaAdapter implements IPriceAdapter {
   }
 
   getCurrentPrice(): number | null {
-    const priceEl = document.querySelector('.product-price__big');
+    const priceEl = queryFirst<HTMLElement>([
+      '.product-price__big',
+      '.product-price__big-color-red',
+      '[data-testid="price"]',
+      '[itemprop="price"]',
+    ]);
     return parsePrice(priceEl?.textContent); // парсер повертає UAH
   }
 
   getOriginalPrice(): number | null {
-    const oldPriceEl = document.querySelector('.product-price__small');
+    const oldPriceEl = queryFirst<HTMLElement>([
+      '.product-price__small',
+      '.product-price__small-old',
+      '[data-testid="old-price"]',
+    ]);
     return parsePrice(oldPriceEl?.textContent); // парсер повертає UAH
   }
 
   getStockStatus(): boolean {
-    const buyButton = document.querySelector('app-buy-button button');
-    return buyButton ? !buyButton.hasAttribute('disabled') : false;
+    const buyButton = queryFirst<HTMLButtonElement>([
+      'app-buy-button button',
+      'button.buy-button',
+      'button[data-testid="buy-button"]',
+    ]);
+    return buyButton ? !buyButton.hasAttribute('disabled') : true;
   }
 
   extractCategoryFromDOM(): string | null {
@@ -92,7 +112,12 @@ export class RozetkaAdapter implements IPriceAdapter {
 
     // 2. Fallback на CSS-селектори та доповнення відсутніх даних
     try {
-      await waitForElement('.product-price__big');
+      await waitForAnyElement([
+        '.product-price__big',
+        '.product-price__big-color-red',
+        '[data-testid="price"]',
+        '.product__title',
+      ]);
 
       const currentPriceUAH = this.getCurrentPrice();
       if (!currentPriceUAH && !productData.price) {
@@ -101,7 +126,7 @@ export class RozetkaAdapter implements IPriceAdapter {
       }
 
       const sku = this.getProductID() || productData.externalId || 'unknown';
-      const titleEl = document.querySelector('.product__title');
+      const titleEl = queryFirst<HTMLElement>(['.product__title', 'h1', '[data-testid="title"]']);
       const cleanUrl = window.location.origin + window.location.pathname;
 
       // Надаємо пріоритет ціні з DOM, якщо вона є (бо JSON-LD може кешуватися)

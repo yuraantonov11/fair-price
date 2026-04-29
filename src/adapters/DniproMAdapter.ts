@@ -1,5 +1,5 @@
 import { IPriceAdapter, ProductData } from './IPriceAdapter';
-import { parsePrice, waitForElement } from '@/utils/domUtils';
+import { parsePrice, queryFirst, waitForAnyElement } from '@/utils/domUtils';
 import { HydrationParser } from '@/utils/hydrationParser';
 import { createLogger } from '@/utils/logger';
 
@@ -11,12 +11,25 @@ export class DniproMAdapter implements IPriceAdapter {
   isProductPage(): boolean { return window.location.pathname.includes('/tovar/'); }
   isCatalogPage(): boolean { return !this.isProductPage() && document.querySelector('.catalog-list') !== null; }
   getUIAnchor(): Element | null {
-    // Insert after the price+buy block so the chart appears directly below the price.
-    return document.querySelector('.product-buy-info') ||
-        document.querySelector('.product-price') ||
-        document.querySelector('.product-code') ||
-        document.querySelector('[itemprop="sku"]')?.closest('div') ||
-        document.querySelector('h1');
+    return queryFirst([
+      '.product-buy-info',
+      '.product-main__buy',
+      '.product-main__actions',
+      '.product-price',
+      '.product-card__price',
+      '.product-code',
+      '[itemprop="sku"]',
+      'h1',
+    ])?.closest('div') ?? queryFirst([
+      '.product-buy-info',
+      '.product-main__buy',
+      '.product-main__actions',
+      '.product-price',
+      '.product-card__price',
+      '.product-code',
+      '[itemprop="sku"]',
+      'h1',
+    ]);
   }
   getUIInsertMethod(): ContentScriptAppendMode { return 'after'; }
 
@@ -35,14 +48,23 @@ export class DniproMAdapter implements IPriceAdapter {
   getCurrentPrice(): number | null {
     const hyd = this.getHydrationData();
     if (hyd?.currentPrice) return parseFloat(hyd.currentPrice);
-    const priceEl = document.querySelector('.product-price__current, .price__current');
+    const priceEl = queryFirst<HTMLElement>([
+      '.product-price__current',
+      '.price__current',
+      '[data-price-current]',
+      '[itemprop="price"]',
+    ]);
     return parsePrice(priceEl?.textContent);
   }
 
   getOriginalPrice(): number | null {
     const hyd = this.getHydrationData();
     if (hyd?.oldPrice) return parseFloat(hyd.oldPrice);
-    const oldPriceEl = document.querySelector('.product-price__old, .price__old');
+    const oldPriceEl = queryFirst<HTMLElement>([
+      '.product-price__old',
+      '.price__old',
+      '[data-price-old]',
+    ]);
     return parsePrice(oldPriceEl?.textContent);
   }
 
@@ -64,7 +86,7 @@ export class DniproMAdapter implements IPriceAdapter {
 
   async parseProductPage(): Promise<ProductData | null> {
     try {
-      await waitForElement('h1', 8000);
+      await waitForAnyElement(['h1', '.product-title', '.product-main h1'], 8000);
       const currentPrice = this.getCurrentPrice();
 
       if (!currentPrice || currentPrice <= 0) return null;
@@ -75,7 +97,7 @@ export class DniproMAdapter implements IPriceAdapter {
 
       return {
         externalId: this.getProductID() || 'unknown',
-        name: document.querySelector('h1')?.textContent?.trim() || 'Товар Dnipro-M',
+        name: queryFirst<HTMLElement>(['h1', '.product-title', '.product-main h1'])?.textContent?.trim() || 'Товар Dnipro-M',
         url: window.location.origin + window.location.pathname,
         price: Math.round(currentPrice * 100),
         regularPrice: this.getOriginalPrice() ? Math.round(this.getOriginalPrice()! * 100) : null,

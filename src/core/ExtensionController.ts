@@ -9,6 +9,8 @@ export class ExtensionController {
     private currentUrl: string;
     private mountPoint: HTMLElement | null = null;
     private observer: MutationObserver | null = null;
+    private processTimer: number | null = null;
+    private restoreTimer: number | null = null;
 
     // Кеш для відновлення після агресивних перемалювань (Angular/React)
     private cachedHistory: any[] | null = null;
@@ -32,7 +34,7 @@ export class ExtensionController {
 
     public init() {
         this.logger.info('Controller initialized', { url: this.currentUrl });
-        this.processPage();
+        void this.processPage();
 
         // Надійний обсервер для SPA-додатків
         this.observer = new MutationObserver(() => {
@@ -42,17 +44,11 @@ export class ExtensionController {
                 this.currentUrl = url;
                 this.logger.info('Detected SPA navigation, restarting page processing', { url });
                 this.cleanup();
-                setTimeout(() => this.processPage(), 500);
+                this.scheduleProcessPage(500);
             } else if (this.adapter.isProductPage() && this.cachedHistory && this.cachedHonestyScore && !this.isProcessing) {
-                // Сценарій 2: URL той самий, але фреймворк магазину видалив наш графік з DOM
-                if (!document.getElementById('fair-price-container')) {
-                    const anchor = this.adapter.getUIAnchor();
-                    // Відновлюємо тільки якщо якір існує (сторінка не перезавантажується повністю)
-                    if (anchor) {
-                        this.logger.info('UI mount was removed by page framework, restoring from cache');
-                        this.mountPoint = null; // Скидаємо посилання на старий, видалений елемент
-                        this.injectUI(this.cachedHistory, this.cachedHonestyScore);
-                    }
+                const anchor = this.adapter.getUIAnchor();
+                if (anchor && (this.isMountMissing() || this.isMountOutOfPlace(anchor))) {
+                    this.scheduleRestoreFromCache();
                 }
             }
         });
@@ -61,12 +57,58 @@ export class ExtensionController {
     }
 
     private cleanup() {
+        if (this.processTimer) {
+            window.clearTimeout(this.processTimer);
+            this.processTimer = null;
+        }
+        if (this.restoreTimer) {
+            window.clearTimeout(this.restoreTimer);
+            this.restoreTimer = null;
+        }
         if (this.mountPoint) {
             this.mountPoint.remove();
             this.mountPoint = null;
         }
         this.cachedHistory = null;
         this.cachedHonestyScore = null;
+    }
+
+    private scheduleProcessPage(delay = 250) {
+        if (this.processTimer) {
+            window.clearTimeout(this.processTimer);
+        }
+        this.processTimer = window.setTimeout(() => {
+            this.processTimer = null;
+            void this.processPage();
+        }, delay);
+    }
+
+    private isMountMissing() {
+        return !this.mountPoint || !document.contains(this.mountPoint);
+    }
+
+    private isMountOutOfPlace(anchor: Element) {
+        if (!this.mountPoint || !document.contains(this.mountPoint)) return true;
+        const insertMethod = this.adapter.getUIInsertMethod();
+        if (insertMethod === 'after') {
+            return this.mountPoint.parentNode !== anchor.parentNode || this.mountPoint.previousSibling !== anchor;
+        }
+        return this.mountPoint.parentNode !== anchor;
+    }
+
+    private scheduleRestoreFromCache() {
+        if (this.restoreTimer) return;
+        this.restoreTimer = window.setTimeout(() => {
+            this.restoreTimer = null;
+            if (!this.cachedHistory || !this.cachedHonestyScore) return;
+            const anchor = this.adapter.getUIAnchor();
+            if (!anchor) return;
+            this.logger.info('UI mount missing or displaced, restoring from cache', { url: this.currentUrl });
+            if (this.isMountMissing()) {
+                this.mountPoint = null;
+            }
+            void this.injectUI(this.cachedHistory, this.cachedHonestyScore);
+        }, 150);
     }
 
     private async processPage() {
@@ -198,13 +240,15 @@ export class ExtensionController {
             this.mountPoint.id = 'fair-price-container';
             // Додані відступи (my-4) та очищення обтікання, щоб макет магазину не "наїжджав" на графік
             this.mountPoint.className = 'w-full my-4 z-[999] block clear-both';
+        }
 
-            const insertMethod = this.adapter.getUIInsertMethod();
-            if (insertMethod === 'after') {
+        const insertMethod = this.adapter.getUIInsertMethod();
+        if (insertMethod === 'after') {
+            if (this.mountPoint.parentNode !== anchor.parentNode || this.mountPoint.previousSibling !== anchor) {
                 anchor.parentNode?.insertBefore(this.mountPoint, anchor.nextSibling);
-            } else {
-                anchor.appendChild(this.mountPoint);
             }
+        } else if (this.mountPoint.parentNode !== anchor) {
+            anchor.appendChild(this.mountPoint);
         }
 
         this.renderUI(this.mountPoint, history, honestyScore);

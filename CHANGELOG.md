@@ -1,3 +1,18 @@
+## [2.3.0] - 2026-04-29
+
+### Changed
+- Unified Dnipro-M and Rozetka rendering through the shared Shadow DOM injector so both stores now use the same mount/reinject lifecycle.
+- Improved SPA hardening in `ExtensionController`: mount restoration is debounced, detects displaced widgets, and repositions the chart next to the current anchor after store re-renders.
+- Added fallback selector helpers in `domUtils` and expanded anchor / title / price resolution in both adapters for more resilient parsing.
+
+### Fixed
+- Price dates in the chart now render with Ukrainian locale (`uk-UA`) instead of US format.
+- Rozetka no longer uses a divergent direct React render path that could drift from Dnipro-M behavior.
+
+### Added
+- Real Playwright smoke regressions for Dnipro-M and Rozetka using extension-loaded Chromium plus routed fixture pages.
+- `npm run test:e2e:smoke` for build + extension smoke validation.
+
 ## [1.2.3] - 2026-04-24
 
 ### Fixed
