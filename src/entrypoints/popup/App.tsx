@@ -103,10 +103,77 @@ const AlertsTab = ({ currentUrl, isSupportedStore }: { currentUrl: string; isSup
     );
 };
 
+// ── Settings Tab ──────────────────────────────────────────────
+const SettingsTab = () => {
+    const { t } = useTranslation();
+    const [affiliateEnabled, setAffiliateEnabled] = useState<boolean>(true);
+    const [loaded, setLoaded] = useState(false);
+
+    useEffect(() => {
+        browser.runtime.sendMessage({ type: 'GET_CONSENT', payload: {} })
+            .then((res: any) => {
+                if (res?.success) setAffiliateEnabled(res.affiliateEnabled ?? true);
+                setLoaded(true);
+            });
+    }, []);
+
+    const toggleConsent = async () => {
+        const next = !affiliateEnabled;
+        setAffiliateEnabled(next);
+        await browser.runtime.sendMessage({
+            type: 'SET_CONSENT',
+            payload: { affiliateEnabled: next },
+        });
+    };
+
+    if (!loaded) return <div className="flex items-center justify-center py-8"><div className="w-4 h-4 rounded-full border-2 border-cyan-400/50 border-t-cyan-400 animate-spin" /></div>;
+
+    return (
+        <div className="space-y-3">
+            {/* Affiliate consent */}
+            <div className="fp-glass p-3 space-y-2">
+                <p className="fp-title">{t('popup.settings.affiliate.title')}</p>
+                <p className="text-[10px] text-slate-400 leading-relaxed">{t('popup.settings.affiliate.description')}</p>
+                <div className="flex items-center justify-between pt-1">
+                    <span className="text-xs text-slate-300 font-medium">{t('popup.settings.affiliate.toggleLabel')}</span>
+                    <button
+                        onClick={toggleConsent}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${affiliateEnabled ? 'bg-cyan-500' : 'bg-slate-600'}`}
+                        role="switch"
+                        aria-checked={affiliateEnabled}
+                    >
+                        <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow-sm transition-transform ${affiliateEnabled ? 'translate-x-4' : 'translate-x-1'}`} />
+                    </button>
+                </div>
+                <p className={`text-[9px] font-semibold ${affiliateEnabled ? 'text-emerald-400' : 'text-slate-500'}`}>
+                    {affiliateEnabled ? t('popup.settings.affiliate.enabled') : t('popup.settings.affiliate.disabled')}
+                    {' · '}{t('popup.settings.affiliate.note')}
+                </p>
+            </div>
+
+            {/* Data transparency */}
+            <div className="fp-glass p-3 space-y-1.5">
+                <p className="fp-title">{t('popup.settings.data.title')}</p>
+                <p className="text-[10px] text-slate-400 leading-relaxed">{t('popup.settings.data.text')}</p>
+            </div>
+
+            {/* Privacy policy link */}
+            <a
+                href="https://github.com/yuraantonov11/fair-price/blob/main/docs/privacy-policy.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center text-[10px] text-cyan-400 hover:text-cyan-300 transition-colors py-1"
+            >
+                {t('popup.settings.privacy')}
+            </a>
+        </div>
+    );
+};
+
 // ── Main App ──────────────────────────────────────────────────
 export default function App() {
     const { t } = useTranslation();
-    const [activeTab, setActiveTab] = useState<'status' | 'feedback' | 'alerts'>('status');
+    const [activeTab, setActiveTab] = useState<'status' | 'alerts' | 'settings'>('status');
     const [currentUrl, setCurrentUrl] = useState('');
     const [suggestion, setSuggestion] = useState('');
     const [isSent, setIsSent] = useState(false);
@@ -126,7 +193,6 @@ export default function App() {
         browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
             setCurrentUrl(tabs[0].url || '');
         });
-        // Load persisted language on popup open
         initLanguage().then(() => setLang(getLanguage()));
     }, []);
 
@@ -136,7 +202,6 @@ export default function App() {
     };
 
     const sendFeedback = async (type: 'suggestion' | 'bug') => {
-        // Виклик вашого Background скрипта для збереження в Supabase
         await browser.runtime.sendMessage({
             type: 'SEND_FEEDBACK',
             payload: { type, url: currentUrl, comment: suggestion }
@@ -152,9 +217,8 @@ export default function App() {
                 <div className="relative flex items-start justify-between gap-2">
                     <div>
                         <h1 className="font-black text-lg tracking-tight leading-none">{t('popup.title')}</h1>
-                        <p className="text-[10px] text-white/80 mt-1 uppercase tracking-[0.14em]">{t('popup.tabs.status')} / {t('popup.tabs.feedback')}</p>
+                        <p className="text-[10px] text-white/80 mt-1 uppercase tracking-[0.14em]">v2 · Fair Price</p>
                     </div>
-
                     <div className="flex gap-0.5 border border-white/25 rounded-md overflow-hidden bg-slate-900/20">
                         {SUPPORTED_LANGUAGES.map(l => (
                             <button
@@ -169,13 +233,17 @@ export default function App() {
                 </div>
 
                 <div className="relative mt-3 p-1 rounded-lg border border-white/18 bg-slate-900/25 grid grid-cols-3 gap-1">
-                    {(['status', 'alerts', 'feedback'] as const).map(tab => (
+                    {([
+                        ['status',   t('popup.tabs.status')],
+                        ['alerts',   t('popup.alerts.tab')],
+                        ['settings', t('popup.settings.tab')],
+                    ] as const).map(([tab, label]) => (
                         <button
                             key={tab}
                             onClick={() => setActiveTab(tab)}
                             className={`text-[11px] py-1.5 rounded-md font-bold transition-colors ${activeTab === tab ? 'bg-white/20 text-white' : 'text-white/75 hover:bg-white/10'}`}
                         >
-                            {tab === 'alerts' ? t('popup.alerts.tab') : t(`popup.tabs.${tab}`)}
+                            {label}
                         </button>
                     ))}
                 </div>
@@ -206,13 +274,44 @@ export default function App() {
                             <div className="fp-soft p-3 text-center">
                                 <p className="text-xs text-slate-300 mb-2.5">{t('popup.status.unsupported')}</p>
                                 <button
-                                    onClick={() => setActiveTab('feedback')}
+                                    onClick={() => {
+                                        // inline feedback form fallback
+                                        browser.tabs.create({ url: 'https://github.com/yuraantonov11/fair-price/issues' });
+                                    }}
                                     className="inline-flex items-center justify-center bg-cyan-500 hover:bg-cyan-400 text-slate-900 text-xs font-bold py-2 px-4 rounded-lg transition-all"
                                 >
                                     {t('popup.status.suggestSite')}
                                 </button>
                             </div>
                         )}
+
+                        {/* Feedback mini-form inline on status tab */}
+                        <div className="fp-glass p-3">
+                            <p className="text-[10px] text-slate-400 mb-2">{t('popup.feedback.prompt')}</p>
+                            {isSent ? (
+                                <div className="text-center py-2">
+                                    <p className="text-[10px] text-cyan-300 font-bold">{t('popup.feedback.thanks')}</p>
+                                    <button onClick={() => setIsSent(false)} className="text-[9px] text-slate-400 underline mt-1">{t('popup.feedback.sendAnother')}</button>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    <textarea
+                                        className="w-full bg-slate-900/80 border border-white/12 rounded-lg p-2 text-xs h-16 focus:border-cyan-400 outline-none resize-none"
+                                        placeholder={t('popup.feedback.placeholder')}
+                                        value={suggestion}
+                                        onChange={e => setSuggestion(e.target.value)}
+                                    />
+                                    <div className="grid grid-cols-2 gap-1.5">
+                                        <button onClick={() => sendFeedback('bug')} className="bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[10px] font-bold py-2 rounded-lg border border-red-500/25">
+                                            {t('popup.feedback.reportBug')}
+                                        </button>
+                                        <button onClick={() => sendFeedback('suggestion')} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 text-[10px] font-bold py-2 rounded-lg">
+                                            {t('popup.feedback.addSite')}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 
@@ -220,40 +319,7 @@ export default function App() {
                     <AlertsTab currentUrl={currentUrl} isSupportedStore={isSupportedStore} />
                 )}
 
-                {activeTab === 'feedback' && (
-                    <div className="space-y-3">
-                        {isSent ? (
-                            <div className="fp-glass text-center py-8 px-3">
-                                <p className="text-cyan-300 font-bold text-sm">{t('popup.feedback.thanks')}</p>
-                                <p className="text-xs text-slate-400 mt-2">{t('popup.feedback.requestReceived')}</p>
-                                <button onClick={() => setIsSent(false)} className="mt-4 text-xs text-slate-200 underline">
-                                    {t('popup.feedback.sendAnother')}
-                                </button>
-                            </div>
-                        ) : (
-                            <>
-                                <div className="fp-glass p-3">
-                                    <p className="text-xs text-slate-300">{t('popup.feedback.prompt')}</p>
-                                    <textarea
-                                        className="mt-2 w-full bg-slate-900/80 border border-white/12 rounded-lg p-2 text-xs h-24 focus:border-cyan-400 outline-none"
-                                        placeholder={t('popup.feedback.placeholder')}
-                                        value={suggestion}
-                                        onChange={(e) => setSuggestion(e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button onClick={() => sendFeedback('bug')} className="bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[10px] font-bold py-2.5 rounded-lg border border-red-500/25">
-                                        {t('popup.feedback.reportBug')}
-                                    </button>
-                                    <button onClick={() => sendFeedback('suggestion')} className="bg-cyan-500 hover:bg-cyan-400 text-slate-900 text-[10px] font-bold py-2.5 rounded-lg">
-                                        {t('popup.feedback.addSite')}
-                                    </button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                )}
+                {activeTab === 'settings' && <SettingsTab />}
             </div>
         </div>
     );

@@ -4,13 +4,11 @@
     "priceHistory": "Price history · {{count}} records",
     "priceTrend": "Price trend",
     "notEnoughData": "Not enough data.",
-
     "trend": {
       "rising": "Rising",
       "falling": "Falling",
       "stable": "Stable"
     },
-
     "score": {
       "label": "Honesty index",
       "baseline": "50 = baseline · 70+ = discount",
@@ -19,12 +17,10 @@
       "decent": "Decent",
       "goodDeal": "Good deal"
     },
-
     "warnings": {
       "volatile": "This item is naturally volatile — evaluate with caution",
       "spike": "Possible artificial price spike before a \"discount\" detected"
     },
-
     "stats": {
       "min90": "Min · 90d",
       "median": "Median",
@@ -33,36 +29,30 @@
       "median60": "Median · 60d",
       "spike": "Spike"
     },
-
     "verdict": {
       "fair": "Fair price",
       "warning": "Worth checking",
       "risky": "Risky price"
     },
-
     "reasonCodes": {
       "SPIKE_14D_DETECTED": "Artificial price spike in last 14 days",
       "PRICE_NEAR_MIN30": "Price near 30-day low — a good deal",
       "HIGH_CATEGORY_VOLATILITY": "This category naturally fluctuates in price",
       "INSUFFICIENT_HISTORY": "Not enough data yet — analysis improves over time"
     },
-
     "source": {
       "label": "Sources:",
       "community": "Community",
       "system": "Auto-monitor"
     },
-
     "tooltip": {
       "regularPrice": "Regular price"
     },
-
     "collecting": {
       "title": "Starting monitoring",
       "counter": "{{count}} / 3 records",
       "observationLabel": "Price observation"
     },
-
     "preview": {
       "title": "Preliminary analysis",
       "counter": "{{count}} / 3 records",
@@ -75,7 +65,6 @@
       "currentBetween": "Current price ({{price}} ₴) is between our observed minimum and maximum (+{{pct}}% vs minimum).",
       "disclaimer": "These prices are observed independently by us. The store may show \"regular\" and \"sale\" prices that are not part of our observations."
     },
-
     "singlePrice": {
       "title": "First confirmed price",
       "counter": "1 record",
@@ -89,7 +78,6 @@
       "days": "{{count}} days"
     }
   },
-
   "popup": {
     "title": "FAIR PRICE",
     "tabs": {
@@ -114,7 +102,6 @@
       "sendAnother": "Send another"
     },
     "language": "Language",
-
     "alerts": {
       "tab": "Alerts",
       "title": "Price Alert",
@@ -129,9 +116,24 @@
       "below": "below {{price}} ₴",
       "unsupported": "Open a product page to set price alerts",
       "error": "Error: {{msg}}"
+    },
+    "settings": {
+      "tab": "Settings",
+      "affiliate": {
+        "title": "Affiliate Program",
+        "description": "FairPrice may earn a referral fee when you click through our service. This does not affect price assessment objectivity — affiliate logic is only activated by your explicit action.",
+        "toggleLabel": "Allow affiliate links",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "note": "Disabling will not affect extension functionality."
+      },
+      "data": {
+        "title": "Data we collect",
+        "text": "We only collect public product prices from supported stores. No personal data is collected or shared."
+      },
+      "privacy": "Privacy Policy →"
     }
   },
-
   "calculator": {
     "invalidPrice": "Error: invalid current price.",
     "noHistory": "Just started collecting price history for analysis.",
@@ -152,5 +154,3 @@
     "veryHighVolatile": "Price is significantly above normal (+{{pct}}%). Not recommended to buy now. (Note: this item's price naturally fluctuates.)"
   }
 }
-
-

@@ -2,6 +2,7 @@ import { supabase } from '@/utils/supabaseClient';
 import {
     SaveProductMessage, GetHistoryMessage, SetIconMessage,
     SaveAlertMessage, GetAlertsMessage, DeleteAlertMessage, TrackEventMessage,
+    SetConsentMessage, GetConsentMessage,
 } from '@/types/messages';
 import { createLogger } from '@/utils/logger';
 
@@ -14,6 +15,7 @@ const lastHistoryCallTs = new Map<number, number>();
 const HISTORY_DEBOUNCE_MS = 500;
 
 const USER_KEY_STORAGE_KEY = 'fp_user_key';
+const CONSENT_STORAGE_KEY  = 'fp_affiliate_consent';
 
 async function getUserKey(): Promise<string> {
   const stored = await browser.storage.local.get(USER_KEY_STORAGE_KEY);
@@ -124,6 +126,15 @@ export default defineBackground(() => {
 
       case 'TRACK_EVENT':
         handleTrackEvent(message as TrackEventMessage).then(sendResponse);
+        return true;
+
+      case 'SET_CONSENT':
+        handleSetConsent(message as SetConsentMessage).then(sendResponse);
+        return true;
+
+      case 'GET_CONSENT':
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        handleGetConsent(message as GetConsentMessage).then(sendResponse);
         return true;
 
       default:
@@ -322,6 +333,30 @@ export default defineBackground(() => {
     }
   }
 
+  async function handleSetConsent(msg: SetConsentMessage) {
+    try {
+      await browser.storage.local.set({ [CONSENT_STORAGE_KEY]: msg.payload.affiliateEnabled });
+      logger.info('Affiliate consent updated', { affiliateEnabled: msg.payload.affiliateEnabled });
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Failed to set consent', { error });
+      return { success: false, error: getErrorMessage(error), code: 'CONSENT_SET_FAILED' };
+    }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async function handleGetConsent(_msg: GetConsentMessage) {
+    try {
+      const stored = await browser.storage.local.get(CONSENT_STORAGE_KEY);
+      // Default: true (opt-in by default, user can opt-out)
+      const affiliateEnabled = stored[CONSENT_STORAGE_KEY] !== false;
+      return { success: true, affiliateEnabled };
+    } catch (error: any) {
+      logger.error('Failed to get consent', { error });
+      return { success: false, error: getErrorMessage(error), code: 'CONSENT_FETCH_FAILED', affiliateEnabled: true };
+    }
+  }
+
   async function handleSetIcon(msg: SetIconMessage, sender: any) {
     const status = msg.payload.status;
     const tabId = sender?.tab?.id;
@@ -346,3 +381,4 @@ export default defineBackground(() => {
     return { success: true };
   }
 });
+

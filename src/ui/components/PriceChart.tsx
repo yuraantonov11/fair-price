@@ -20,7 +20,7 @@ interface PriceChartProps {
   store?: string;
 }
 
-const DEFAULT_CHART_LOCALE = 'en-US';
+const DEFAULT_CHART_LOCALE = 'uk-UA';
 
 // Хелпери
 function scoreColor(score: number) {

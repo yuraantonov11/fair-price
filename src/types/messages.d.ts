@@ -43,6 +43,16 @@ export interface TrackEventMessage {
     payload: { event: string; data?: Record<string, unknown> };
 }
 
+export interface SetConsentMessage {
+    type: 'SET_CONSENT';
+    payload: { affiliateEnabled: boolean };
+}
+
+export interface GetConsentMessage {
+    type: 'GET_CONSENT';
+    payload?: Record<string, never>;
+}
+
 export type ExtensionMessage =
     | SaveProductMessage
     | GetHistoryMessage
@@ -50,5 +60,6 @@ export type ExtensionMessage =
     | SaveAlertMessage
     | GetAlertsMessage
     | DeleteAlertMessage
-    | TrackEventMessage;
-
+    | TrackEventMessage
+    | SetConsentMessage
+    | GetConsentMessage;
