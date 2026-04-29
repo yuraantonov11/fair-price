@@ -110,6 +110,14 @@ export class ExtensionController {
             }
 
             const historyData = Array.isArray(historyResponse?.data) ? historyResponse.data : [];
+
+            // KPI: track history_loaded
+            if (historyResponse?.success && historyData.length > 0) {
+                MessageRouter.send({
+                    type: 'TRACK_EVENT',
+                    payload: { event: 'history_loaded', data: { store: this.adapter.getStoreDomain(), count: historyData.length } },
+                }).catch(() => {});
+            }
             let mappedHistory = historyData.map((item: any) => ({
                 price: item.price,
                 oldPrice: item.oldPrice,
@@ -158,6 +166,20 @@ export class ExtensionController {
             this.cachedHonestyScore = honestyResult;
 
             await this.injectUI(mappedHistory, honestyResult);
+
+            // KPI: track widget_shown
+            MessageRouter.send({
+                type: 'TRACK_EVENT',
+                payload: {
+                    event: 'widget_shown',
+                    data: {
+                        store: this.adapter.getStoreDomain(),
+                        state: honestyResult.state,
+                        verdict: honestyResult.verdict,
+                        score: honestyResult.score,
+                    },
+                },
+            }).catch(() => {});
 
         } catch (error) {
             this.logger.error('Page processing failed', { error, url: this.currentUrl });

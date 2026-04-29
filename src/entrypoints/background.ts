@@ -1,5 +1,8 @@
 import { supabase } from '@/utils/supabaseClient';
-import { SaveProductMessage, GetHistoryMessage, SetIconMessage } from '@/types/messages';
+import {
+    SaveProductMessage, GetHistoryMessage, SetIconMessage,
+    SaveAlertMessage, GetAlertsMessage, DeleteAlertMessage, TrackEventMessage,
+} from '@/types/messages';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('background', { runtime: 'background' });
@@ -9,6 +12,16 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 // SPA debounce: prevent duplicate GET_HISTORY calls within 500ms per tab
 const lastHistoryCallTs = new Map<number, number>();
 const HISTORY_DEBOUNCE_MS = 500;
+
+const USER_KEY_STORAGE_KEY = 'fp_user_key';
+
+async function getUserKey(): Promise<string> {
+  const stored = await browser.storage.local.get(USER_KEY_STORAGE_KEY);
+  if (stored[USER_KEY_STORAGE_KEY]) return stored[USER_KEY_STORAGE_KEY] as string;
+  const key = crypto.randomUUID();
+  await browser.storage.local.set({ [USER_KEY_STORAGE_KEY]: key });
+  return key;
+}
 
 const ICON_PATHS = {
   success: 'icons/icon_success.png',
@@ -95,6 +108,22 @@ export default defineBackground(() => {
 
       case 'SEND_FEEDBACK':
         handleSendFeedback(message).then(sendResponse);
+        return true;
+
+      case 'SAVE_ALERT':
+        handleSaveAlert(message as SaveAlertMessage).then(sendResponse);
+        return true;
+
+      case 'GET_ALERTS':
+        handleGetAlerts(message as GetAlertsMessage).then(sendResponse);
+        return true;
+
+      case 'DELETE_ALERT':
+        handleDeleteAlert(message as DeleteAlertMessage).then(sendResponse);
+        return true;
+
+      case 'TRACK_EVENT':
+        handleTrackEvent(message as TrackEventMessage).then(sendResponse);
         return true;
 
       default:
@@ -188,6 +217,108 @@ export default defineBackground(() => {
     } catch (error: any) {
       logger.error('Failed to fetch history', { error, url: msg?.payload?.url });
       return { success: false, error: getErrorMessage(error), code: 'SUPABASE_HISTORY_FAILED', data: [] };
+    }
+  }
+
+  async function handleSaveAlert(msg: SaveAlertMessage) {
+    try {
+      const config = validateSupabaseConfig();
+      if (!config.ok) return { success: false, error: config.error, code: 'SUPABASE_CONFIG_ERROR' };
+
+      const userKey = await getUserKey();
+      const { url, targetPrice, channel = 'browser' } = msg.payload;
+
+      // Resolve product_id from URL
+      const { data: products, error: productError } = await supabase
+          .from('products').select('id').eq('url', url).limit(1);
+      if (productError) throw productError;
+      if (!products || products.length === 0) {
+        return { success: false, error: 'Product not found — visit the product page first', code: 'PRODUCT_NOT_FOUND' };
+      }
+
+      const { error } = await supabase.from('price_alerts').insert({
+        user_key: userKey,
+        product_id: products[0].id,
+        target_price: Math.round(targetPrice * 100), // UAH → kopecks
+        channel,
+        is_active: true,
+      });
+      if (error) throw error;
+      logger.info('Alert saved', { url, targetPrice, channel });
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Failed to save alert', { error, url: msg?.payload?.url });
+      return { success: false, error: getErrorMessage(error), code: 'ALERT_SAVE_FAILED' };
+    }
+  }
+
+  async function handleGetAlerts(msg: GetAlertsMessage) {
+    try {
+      const config = validateSupabaseConfig();
+      if (!config.ok) return { success: false, error: config.error, code: 'SUPABASE_CONFIG_ERROR', data: [] };
+
+      const userKey = await getUserKey();
+      const { url } = msg.payload;
+
+      const { data, error } = await supabase
+          .from('price_alerts')
+          .select('id, target_price, channel, is_active, created_at, products!inner(url)')
+          .eq('products.url', url)
+          .eq('user_key', userKey)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      return {
+        success: true,
+        data: (data ?? []).map((a: any) => ({
+          id: a.id,
+          targetPrice: a.target_price / 100, // kopecks → UAH
+          channel: a.channel,
+          createdAt: a.created_at,
+        })),
+      };
+    } catch (error: any) {
+      logger.error('Failed to get alerts', { error, url: msg?.payload?.url });
+      return { success: false, error: getErrorMessage(error), code: 'ALERT_FETCH_FAILED', data: [] };
+    }
+  }
+
+  async function handleDeleteAlert(msg: DeleteAlertMessage) {
+    try {
+      const config = validateSupabaseConfig();
+      if (!config.ok) return { success: false, error: config.error, code: 'SUPABASE_CONFIG_ERROR' };
+
+      const userKey = await getUserKey();
+      const { error } = await supabase
+          .from('price_alerts')
+          .update({ is_active: false })
+          .eq('id', msg.payload.alertId)
+          .eq('user_key', userKey);
+
+      if (error) throw error;
+      return { success: true };
+    } catch (error: any) {
+      logger.error('Failed to delete alert', { error, alertId: msg?.payload?.alertId });
+      return { success: false, error: getErrorMessage(error), code: 'ALERT_DELETE_FAILED' };
+    }
+  }
+
+  async function handleTrackEvent(msg: TrackEventMessage) {
+    try {
+      const config = validateSupabaseConfig();
+      if (!config.ok) return { success: false };
+
+      const { error } = await supabase.from('audit_events').insert({
+        event_type: msg.payload.event,
+        payload: msg.payload.data ?? {},
+      });
+      if (error) throw error;
+      return { success: true };
+    } catch {
+      // telemetry errors are silent — never block the main flow
+      return { success: false };
     }
   }
 

@@ -9,7 +9,7 @@ export interface GetHistoryMessage {
     type: 'GET_HISTORY';
     payload: {
         url: string;
-        sku?: string; // Можна шукати і за SKU, якщо захочемо в майбутньому
+        sku?: string;
     };
 }
 export interface SetIconMessage {
@@ -19,4 +19,36 @@ export interface SetIconMessage {
     };
 }
 
-export type ExtensionMessage = SaveProductMessage | GetHistoryMessage | SetIconMessage;
+export interface SaveAlertMessage {
+    type: 'SAVE_ALERT';
+    payload: {
+        url: string;
+        targetPrice: number; // UAH (will be converted to kopecks in background)
+        channel?: 'browser' | 'telegram';
+    };
+}
+
+export interface GetAlertsMessage {
+    type: 'GET_ALERTS';
+    payload: { url: string };
+}
+
+export interface DeleteAlertMessage {
+    type: 'DELETE_ALERT';
+    payload: { alertId: string };
+}
+
+export interface TrackEventMessage {
+    type: 'TRACK_EVENT';
+    payload: { event: string; data?: Record<string, unknown> };
+}
+
+export type ExtensionMessage =
+    | SaveProductMessage
+    | GetHistoryMessage
+    | SetIconMessage
+    | SaveAlertMessage
+    | GetAlertsMessage
+    | DeleteAlertMessage
+    | TrackEventMessage;
+

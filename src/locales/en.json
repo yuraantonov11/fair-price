@@ -113,7 +113,23 @@
       "requestReceived": "Your request has been received.",
       "sendAnother": "Send another"
     },
-    "language": "Language"
+    "language": "Language",
+
+    "alerts": {
+      "tab": "Alerts",
+      "title": "Price Alert",
+      "subtitle": "Get notified when the price drops below your target",
+      "targetPricePlaceholder": "Alert me below this price (₴)",
+      "saveBtn": "Save alert",
+      "saving": "Saving...",
+      "saved": "✅ Alert saved",
+      "noAlerts": "No active alerts for this page",
+      "activeAlerts": "Active alerts",
+      "deleteBtn": "✕",
+      "below": "below {{price}} ₴",
+      "unsupported": "Open a product page to set price alerts",
+      "error": "Error: {{msg}}"
+    }
   },
 
   "calculator": {
