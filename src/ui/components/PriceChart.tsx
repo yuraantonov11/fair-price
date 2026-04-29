@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import '@/utils/i18n';
-import type { HonestyResult, PriceTrend } from '@/types/honesty';
+import type { HonestyResult, PriceTrend, HonestyVerdict } from '@/types/honesty';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
@@ -11,6 +11,7 @@ type PriceHistory = {
   oldPrice?: number | null;
   promoName?: string | null;
   date: string | number;
+  source?: 'community' | 'system' | string;
 };
 
 interface PriceChartProps {
@@ -45,6 +46,61 @@ function trendCls(trend?: PriceTrend): string {
   if (trend === 'falling') return 'text-emerald-400';
   return 'text-slate-400';
 }
+
+// Reason code chip config
+const REASON_CODE_CONFIG: Record<string, { icon: string; className: string }> = {
+  SPIKE_14D_DETECTED:      { icon: '🚨', className: 'bg-rose-500/15 border-rose-500/30 text-rose-200' },
+  PRICE_NEAR_MIN30:        { icon: '🎯', className: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-200' },
+  HIGH_CATEGORY_VOLATILITY:{ icon: '⚡', className: 'bg-amber-500/15 border-amber-500/30 text-amber-200' },
+  INSUFFICIENT_HISTORY:    { icon: 'ℹ️', className: 'bg-slate-500/20 border-slate-500/30 text-slate-300' },
+};
+
+const ReasonChips = ({ codes }: { codes: string[] }) => {
+  const { t } = useTranslation();
+  if (!codes || codes.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {codes.map(code => {
+        const cfg = REASON_CODE_CONFIG[code] ?? { icon: '○', className: 'bg-slate-600/20 border-slate-600/30 text-slate-300' };
+        return (
+          <span key={code}
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full border text-[10px] font-semibold leading-none ${cfg.className}`}>
+            <span>{cfg.icon}</span>
+            <span>{t(`chart.reasonCodes.${code}`, code)}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+};
+
+function verdictCls(verdict?: HonestyVerdict): string {
+  if (verdict === 'fair')    return 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300';
+  if (verdict === 'risky')   return 'bg-rose-500/15 border-rose-500/30 text-rose-300';
+  return 'bg-amber-500/10 border-amber-500/20 text-amber-300';
+}
+
+const SourceLegend = ({ data }: { data: PriceHistory[] }) => {
+  const { t } = useTranslation();
+  const counts = data.reduce((acc, d) => {
+    const s = d.source ?? 'community';
+    acc[s] = (acc[s] ?? 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  const entries = Object.entries(counts);
+  if (entries.length === 0) return null;
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.source.label')}</span>
+      {entries.map(([src, cnt]) => (
+        <span key={src}
+          className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${src === 'system' ? 'bg-violet-500/10 border-violet-500/20 text-violet-300' : 'bg-slate-500/10 border-slate-600/20 text-slate-400'}`}>
+          {t(`chart.source.${src}`, src)} ({cnt})
+        </span>
+      ))}
+    </div>
+  );
+};
 
 // Круговий індикатор чесності
 const ScoreRing = ({ score }: { score: number }) => {
@@ -351,12 +407,19 @@ export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{t('chart.fairprice')}</span>
             <span className="text-xs text-slate-400 font-medium">{t('chart.priceHistory', { count: chartData.length })}</span>
           </div>
-          {honesty.details?.trend && (
-            <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg bg-white/5 ${trendCls(honesty.details.trend)}`}>
-              <span>{trendIcon(honesty.details.trend)}</span>
-              <span className="text-[10px]">{t(trendKey(honesty.details.trend))}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {honesty.verdict && (
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${verdictCls(honesty.verdict)}`}>
+                {t(`chart.verdict.${honesty.verdict}`)}
+              </span>
+            )}
+            {honesty.details?.trend && (
+              <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-lg bg-white/5 ${trendCls(honesty.details.trend)}`}>
+                <span>{trendIcon(honesty.details.trend)}</span>
+                <span className="text-[10px]">{t(trendKey(honesty.details.trend))}</span>
+              </div>
+            )}
+          </div>
         </div>
 
         {honesty.details?.isVolatile && (
@@ -377,6 +440,10 @@ export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
           {translatedMessage}
         </div>
 
+        {honesty.reasonCodes && honesty.reasonCodes.length > 0 && (
+          <ReasonChips codes={honesty.reasonCodes} />
+        )}
+
         <div className="w-full h-45 mt-1 relative" ref={containerRef}>
           {chartWidth > 0 && (
               <AreaChart width={chartWidth} height={180} data={chartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
@@ -395,19 +462,39 @@ export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
           )}
         </div>
 
-        {honesty.details?.min90 != null && (
+        {/* V2 stats row — uses metrics if available, falls back to legacy details */}
+        {(honesty.metrics || honesty.details?.min90 != null) && (
           <div className="grid grid-cols-3 gap-2 pt-1">
             <div className="flex flex-col items-center rounded-lg bg-white/3 px-2 py-1.5 border border-white/5">
-              <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.stats.min90')}</span>
-              <span className="text-xs font-black text-emerald-400 mt-0.5">{Math.round(honesty.details.min90!)} ₴</span>
+              <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">
+                {honesty.metrics ? t('chart.stats.min30') : t('chart.stats.min90')}
+              </span>
+              <span className="text-xs font-black text-emerald-400 mt-0.5">
+                {Math.round(honesty.metrics?.min30 ?? honesty.details?.min90 ?? 0)} ₴
+              </span>
             </div>
             <div className="flex flex-col items-center rounded-lg bg-white/5 px-2 py-1.5 border border-white/10">
-              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">{t('chart.stats.median')}</span>
-              <span className="text-xs font-black text-slate-200 mt-0.5">{honesty.details.median90} ₴</span>
+              <span className="text-[9px] uppercase tracking-wider text-slate-400 font-bold">
+                {honesty.metrics ? t('chart.stats.median60') : t('chart.stats.median')}
+              </span>
+              <span className="text-xs font-black text-slate-200 mt-0.5">
+                {Math.round(honesty.metrics?.median60 ?? honesty.details?.median90 ?? 0)} ₴
+              </span>
             </div>
             <div className="flex flex-col items-center rounded-lg bg-white/3 px-2 py-1.5 border border-white/5">
-              <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.stats.max90')}</span>
-              <span className="text-xs font-black text-rose-400 mt-0.5">{Math.round(honesty.details.max90!)} ₴</span>
+              {honesty.metrics ? (
+                <>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.stats.spike')}</span>
+                  <span className={`text-xs font-black mt-0.5 ${honesty.metrics.spike14Pct > 0.15 ? 'text-rose-400' : 'text-slate-400'}`}>
+                    {honesty.metrics.spike14Pct > 0 ? `+${Math.round(honesty.metrics.spike14Pct * 100)}%` : '—'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.stats.max90')}</span>
+                  <span className="text-xs font-black text-rose-400 mt-0.5">{Math.round(honesty.details?.max90 ?? 0)} ₴</span>
+                </>
+              )}
             </div>
           </div>
         )}
@@ -418,6 +505,7 @@ export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
               <div className="w-4 h-1 rounded-full" style={{ backgroundColor: colors.stroke }} />
               <span className="text-[10px] text-slate-400 font-medium">{t('chart.priceTrend')}</span>
             </div>
+            <SourceLegend data={data} />
           </div>
           {honesty.score !== -1 && <ScoreRing score={honesty.score} />}
         </div>

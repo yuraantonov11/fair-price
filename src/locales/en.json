@@ -28,7 +28,29 @@
     "stats": {
       "min90": "Min · 90d",
       "median": "Median",
-      "max90": "Max · 90d"
+      "max90": "Max · 90d",
+      "min30": "Min · 30d",
+      "median60": "Median · 60d",
+      "spike": "Spike"
+    },
+
+    "verdict": {
+      "fair": "Fair price",
+      "warning": "Worth checking",
+      "risky": "Risky price"
+    },
+
+    "reasonCodes": {
+      "SPIKE_14D_DETECTED": "Artificial price spike in last 14 days",
+      "PRICE_NEAR_MIN30": "Price near 30-day low — a good deal",
+      "HIGH_CATEGORY_VOLATILITY": "This category naturally fluctuates in price",
+      "INSUFFICIENT_HISTORY": "Not enough data yet — analysis improves over time"
+    },
+
+    "source": {
+      "label": "Sources:",
+      "community": "Community",
+      "system": "Auto-monitor"
     },
 
     "tooltip": {
