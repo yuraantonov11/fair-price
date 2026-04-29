@@ -141,6 +141,33 @@ export class ExtensionController {
 
             const historyData = Array.isArray(historyResponse?.data) ? historyResponse.data : [];
 
+            const baselineResponse = await MessageRouter.send({
+                type: 'CHECK_BASELINE',
+                payload: {
+                    url: productData.url,
+                    store: this.adapter.getStoreDomain(),
+                    externalId: productData.externalId,
+                    currentPrice: productData.price / 100,
+                },
+            });
+
+            if (baselineResponse?.success && baselineResponse?.data) {
+                MessageRouter.send({
+                    type: 'TRACK_EVENT',
+                    payload: {
+                        event: 'personalized_pricing_check',
+                        data: {
+                            store: this.adapter.getStoreDomain(),
+                            url: productData.url,
+                            currentPrice: baselineResponse.data.currentPrice,
+                            baselinePrice: baselineResponse.data.baselinePrice,
+                            deltaPct: baselineResponse.data.deltaPct,
+                            isSuspicious: baselineResponse.data.isSuspicious,
+                        },
+                    },
+                }).catch(() => {});
+            }
+
             // KPI: track history_loaded
             if (historyResponse?.success && historyData.length > 0) {
                 MessageRouter.send({

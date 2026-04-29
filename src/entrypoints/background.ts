@@ -2,13 +2,14 @@ import { supabase } from '@/utils/supabaseClient';
 import {
     SaveProductMessage, GetHistoryMessage, SetIconMessage,
     SaveAlertMessage, GetAlertsMessage, DeleteAlertMessage, TrackEventMessage,
-    SetConsentMessage, GetConsentMessage,
+    SetConsentMessage, GetConsentMessage, CheckBaselineMessage,
 } from '@/types/messages';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('background', { runtime: 'background' });
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const BASELINE_API_URL = import.meta.env.VITE_BASELINE_API_URL;
 
 // SPA debounce: prevent duplicate GET_HISTORY calls within 500ms per tab
 const lastHistoryCallTs = new Map<number, number>();
@@ -135,6 +136,10 @@ export default defineBackground(() => {
       case 'GET_CONSENT':
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         handleGetConsent(message as GetConsentMessage).then(sendResponse);
+        return true;
+
+      case 'CHECK_BASELINE':
+        handleCheckBaseline(message as CheckBaselineMessage).then(sendResponse);
         return true;
 
       default:
@@ -354,6 +359,64 @@ export default defineBackground(() => {
     } catch (error: any) {
       logger.error('Failed to get consent', { error });
       return { success: false, error: getErrorMessage(error), code: 'CONSENT_FETCH_FAILED', affiliateEnabled: true };
+    }
+  }
+
+  async function handleCheckBaseline(msg: CheckBaselineMessage) {
+    try {
+      if (!BASELINE_API_URL) {
+        return { success: false, code: 'BASELINE_DISABLED', reason: 'VITE_BASELINE_API_URL is not configured' };
+      }
+
+      const requestBody = {
+        url: msg.payload.url,
+        store: msg.payload.store,
+        externalId: msg.payload.externalId,
+      };
+
+      const response = await fetch(BASELINE_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        return { success: false, code: 'BASELINE_HTTP_ERROR', status: response.status };
+      }
+
+      const payload = await response.json() as {
+        baselinePrice?: number;
+        currency?: string;
+        sampleSize?: number;
+      };
+
+      if (!payload?.baselinePrice || payload.baselinePrice <= 0) {
+        return { success: false, code: 'BASELINE_EMPTY' };
+      }
+
+      const currentPrice = msg.payload.currentPrice;
+      const baselinePrice = payload.baselinePrice;
+      const deltaPct = baselinePrice > 0 ? (currentPrice - baselinePrice) / baselinePrice : 0;
+      const isSuspicious = Math.abs(deltaPct) >= 0.08;
+
+      return {
+        success: true,
+        data: {
+          baselinePrice,
+          currentPrice,
+          deltaPct: Math.round(deltaPct * 1000) / 1000,
+          isSuspicious,
+          currency: payload.currency ?? 'UAH',
+          sampleSize: payload.sampleSize ?? null,
+        },
+      };
+    } catch (error: any) {
+      logger.warn('Baseline check failed', {
+        error: getErrorMessage(error),
+        url: msg.payload.url,
+        store: msg.payload.store,
+      });
+      return { success: false, code: 'BASELINE_ERROR', error: getErrorMessage(error) };
     }
   }
 

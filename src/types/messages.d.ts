@@ -53,6 +53,16 @@ export interface GetConsentMessage {
     payload?: Record<string, never>;
 }
 
+export interface CheckBaselineMessage {
+    type: 'CHECK_BASELINE';
+    payload: {
+        url: string;
+        store: string;
+        externalId?: string;
+        currentPrice: number; // UAH
+    };
+}
+
 export type ExtensionMessage =
     | SaveProductMessage
     | GetHistoryMessage
@@ -62,4 +72,5 @@ export type ExtensionMessage =
     | DeleteAlertMessage
     | TrackEventMessage
     | SetConsentMessage
-    | GetConsentMessage;
+    | GetConsentMessage
+    | CheckBaselineMessage;
