@@ -18,7 +18,7 @@
 ## Швидкий старт (людина + AI агент)
 
 1.  **Встановіть залежності**:
-    ```bash
+    ```powershell
     npm run setup
     ```
     *Примітка: Переконайтеся, що ви використовуєте Node.js LTS версії (v20+ рекомендується для React 19).*
@@ -30,12 +30,12 @@
    Заповніть `VITE_SUPABASE_URL` і `VITE_SUPABASE_ANON_KEY`.
 
 3. **Перевірте preflight**:
-   ```bash
+   ```powershell
    npm run doctor
    ```
 
 4.  **Запустіть режим розробки**:
-    ```bash
+    ```powershell
     npm run dev
     ```
     Ця команда:
@@ -60,7 +60,7 @@
 
 ### Автономна перевірка для AI агента
 
-```bash
+```powershell
 npm run verify:agent
 ```
 
@@ -68,7 +68,7 @@ npm run verify:agent
 
 Для crawler-інтеграції:
 
-```bash
+```powershell
 npm run verify:agent:crawl
 ```
 
@@ -107,25 +107,26 @@ https://dnipro-m.ua/tovar/akumulyatorna-lancyugova-pila-dms-201bc/?fp_test=1&fp_
 ### Тестування
 
 - Unit-тести (Vitest):
-  ```bash
+  ```powershell
   npm run test
   ```
 - Повна перевірка локально (як перед PR):
-  ```bash
+  ```powershell
   npm run verify
   ```
 - Перевірка, що в коді немає `console.*` поза `src/utils/logger.ts`:
-  ```bash
+  ```powershell
   npm run check:logs
   ```
 - Watch-режим unit-тестів:
-  ```bash
+  ```powershell
   npm run test:watch
   ```
 - E2E (Playwright):
-  ```bash
+  ```powershell
   npm run test:e2e:install
   npm run test:e2e
+  npm run test:e2e:smoke
   ```
 
 ### CI / деплой артефактів
@@ -137,12 +138,13 @@ https://dnipro-m.ua/tovar/akumulyatorna-lancyugova-pila-dms-201bc/?fp_test=1&fp_
 - Legacy manual build-only workflow: `.github/workflows/build-release.yml`
 - CI запускає:
   - `npm run ci:check` (typecheck + unit tests)
+  - `npm run test:e2e:smoke:ci` (real extension smoke for Dnipro-M / Rozetka after build)
   - `npm run ci:build` (build + zip для Chrome/Firefox)
 - Після виконання workflow артефакти доступні як `extension-output`.
 - `release.yml` публікує `.output/**/*.zip` у GitHub Release.
 
 5.  **Збірка для публікації**:
-    ```bash
+    ```powershell
     npm run build
     ```
     Готове розширення (zip-архів та розпакована папка) з'явиться у директорії `.output/`.

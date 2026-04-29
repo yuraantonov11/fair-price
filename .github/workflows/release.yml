@@ -29,6 +29,18 @@ jobs:
       - name: Static checks and unit tests
         run: npm run ci:check
 
+      - name: Build extension for smoke tests
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Extension smoke regressions
+        run: npm run test:e2e:smoke:ci
+
       - name: Build and package extension
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}

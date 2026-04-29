@@ -12,7 +12,7 @@
 - ⏱️ Час: **~1 хв 6 сек** (очікується ~15 хвилин)
 
 Перевірити статус:
-```bash
+```powershell
 Get-ChildItem crawl_*.log -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1 | ForEach-Object { Get-Content $_.FullName -Tail 20 }
 ```
 
@@ -33,7 +33,7 @@ Get-ChildItem crawl_*.log -ErrorAction SilentlyContinue | Sort-Object LastWriteT
 ## 🧪 Тестування розширення
 
 ### 1️⃣ Побудувати розширення (Chrome)
-```bash
+```powershell
 npm run build
 ```
 
@@ -56,7 +56,7 @@ https://dnipro-m.ua/tovar/akumulyatorna-lancyugova-pila-dms-201bc/
 - ✓ **Popup** розширення (натиснути на іконку) покаже графік
 
 ### 5️⃣ Перевірка логів
-```bash
+```powershell
 # Відкрити DevTools розширення
 chrome://extensions/
 # Натиснути на розширення → Details → "Inspect views" → "Service worker"
@@ -66,7 +66,7 @@ chrome://extensions/
 
 ## 🔧 Розробка (Hot Reload)
 
-```bash
+```powershell
 npm run dev
 # Це запустить Chrome з розширенням + автоперезавантаженням при змінах
 ```
@@ -83,7 +83,7 @@ npm run dev
 - `src/core/ExtensionController.ts` — оркестрація
 
 **Тестові команди:**
-```bash
+```powershell
 npm run typecheck          # Перевірка типів
 npm run test               # Unit-тести
 npm run test:e2e           # E2E-тести (Playwright)

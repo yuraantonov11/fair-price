@@ -23,15 +23,15 @@ git clone https://github.com/yourusername/fair_price.git
 cd fair_price
 
 # 1b. Встанови залежності
-npm install
+npm run setup
 
 # 1c. Скопіюй конфігурацію
-Copy-Item .env.example .env.local
+Copy-Item .env.example .env
 
-# 1d. Редагуй .env.local - заповни Supabase ключи
+# 1d. Редагуй .env - заповни Supabase ключи
 # VITE_SUPABASE_URL=https://...
 # VITE_SUPABASE_ANON_KEY=eyJ...
-notepad .env.local
+notepad .env
 ```
 
 ### Крок 2: Запуск (5 хвилин)
@@ -87,7 +87,7 @@ npm run typecheck
 Дії:
 1. Додай secrets в GitHub Settings
 2. Перевір workflows в `.github/workflows/`
-3. Запусти `git tag v1.0.0` для тестування
+3. Для перевірки релізного пайплайну використовуй тег формату `v*`, наприклад `git tag v2.3.1`
 
 **Час:** 30 хвилин
 
@@ -104,7 +104,7 @@ npm run typecheck
 ## ❓ Типові питання
 
 **Q: Де налаштовується логування?**
-A: `VITE_LOG_LEVEL` в `.env.local`
+A: `VITE_LOG_LEVEL` в `.env`
 
 **Q: Як дебугити помилку `Failed to fetch`?**
 A: Прочитай [docs/SETUP.md#типові-проблеми](docs/SETUP.md)
@@ -123,8 +123,8 @@ A: `npm run test` або `npm run test:watch`
 ## ✅ Чек-лист для розробника
 
 - [ ] Клонував репозиторій
-- [ ] Запустив `npm install`
-- [ ] Скопіював `.env.example` → `.env.local`
+- [ ] Запустив `npm run setup`
+- [ ] Скопіював `.env.example` → `.env`
 - [ ] Заповнив SUPABASE ключи
 - [ ] Запустив `npm run dev`
 - [ ] Бачу розширення на сторінці товару
