@@ -1,4 +1,5 @@
 import type { HonestyResult, PriceTrend } from '@/types/honesty';
+import { getCategoryVolatility } from '@/core/volatility';
 export type { HonestyResult, PriceTrend, HonestyState } from '@/types/honesty';
 
 export class HonestyCalculator {
@@ -31,7 +32,7 @@ export class HonestyCalculator {
     static calculate(
         currentPrice: number,
         priceHistory: { price: number; date: number }[],
-        category: string = 'General',
+        category: string = 'unknown',
     ): HonestyResult {
         if (!currentPrice || currentPrice <= 0) {
             return {
@@ -39,6 +40,8 @@ export class HonestyCalculator {
                 messageKey: 'calculator.invalidPrice',
                 message: 'Error: invalid current price.',
                 state: 'invalid',
+                verdict: 'risky',
+                reasonCodes: [],
             };
         }
 
@@ -53,6 +56,7 @@ export class HonestyCalculator {
                 message: 'Just started collecting price history for analysis.',
                 state: 'collecting',
                 details: { entryCount: 0 },
+                reasonCodes: ['INSUFFICIENT_HISTORY'],
             };
         }
 
@@ -77,6 +81,7 @@ export class HonestyCalculator {
                     observedPrice: pt.price,
                     daysAtObservedPrice,
                 },
+                reasonCodes: ['INSUFFICIENT_HISTORY'],
             };
         }
 
@@ -92,66 +97,91 @@ export class HonestyCalculator {
                     lastSeenAt: validHistory[validHistory.length - 1]?.date,
                     observedPrices: validHistory.map(p => ({ price: p.price, date: p.date })),
                 },
+                reasonCodes: ['INSUFFICIENT_HISTORY'],
             };
         }
 
         // ── Full analysis (3+ entries) ──────────────────────────────────
         const now = Date.now();
-        const ninetyDaysAgo = now - 90 * 86_400_000;
+        const sixtyDaysAgo   = now - 60 * 86_400_000;
+        const thirtyDaysAgo  = now - 30 * 86_400_000;
         const fourteenDaysAgo = now - 14 * 86_400_000;
 
-        // Use 90-day window; fall back to all history if window is too thin
-        const window90 = validHistory.filter(p => p.date >= ninetyDaysAgo);
-        const useHistory = window90.length >= 3 ? window90 : validHistory;
+        // V2 windows
+        const window60 = validHistory.filter(p => p.date >= sixtyDaysAgo);
+        const window30 = validHistory.filter(p => p.date >= thirtyDaysAgo);
 
-        const prices = useHistory.map(p => p.price);
-        const median = this.calculateMedian(prices);
-        const min90 = Math.min(...prices);
-        const max90 = Math.max(...prices);
-        const mean = prices.reduce((s, p) => s + p, 0) / prices.length;
-        const stdDev = this.calculateStdDev(prices, mean);
+        // Fall back to all history if windows are too thin (< 3 points)
+        const useHistory60 = window60.length >= 3 ? window60 : validHistory;
+        const isInsufficientHistory = window60.length < 3;
 
-        if (median === 0) {
+        const prices60 = useHistory60.map(p => p.price);
+        const median60 = this.calculateMedian(prices60);
+
+        // min30: minimum from 30-day window; fall back to 60d window
+        const prices30 = window30.length >= 1 ? window30.map(p => p.price) : prices60;
+        const min30 = Math.min(...prices30);
+
+        const mean60 = prices60.reduce((s, p) => s + p, 0) / prices60.length;
+        const stdDev = this.calculateStdDev(prices60, mean60);
+
+        if (median60 === 0) {
             return {
                 score: 0,
                 messageKey: 'calculator.insufficientData',
                 message: 'Not enough valid data for analysis.',
                 state: 'invalid',
+                reasonCodes: ['INSUFFICIENT_HISTORY'],
             };
         }
 
-        // Volatility: CV (coefficient of variation) > 25% → volatile product
-        const cv = stdDev / median;
-        const isVolatile = cv > 0.25;
+        // ── Category volatility thresholds ──────────────────────────────
+        const cv = getCategoryVolatility(category);
+        const { spikeThresholdPct, warningBandPct } = cv;
 
-        // ── Spike detection ─────────────────────────────────────────────
-        // Recent prices (14 days) vs older median
+        // CV (coefficient of variation)
+        const cvValue = stdDev / median60;
+        const isVolatile = cvValue > warningBandPct;
+
+        // ── Spike detection (14-day window) ─────────────────────────────
         const recentPts = validHistory.filter(p => p.date >= fourteenDaysAgo);
-        const olderPts  = validHistory.filter(p => p.date < fourteenDaysAgo && p.date >= ninetyDaysAgo);
-        const oldMedian = olderPts.length > 0 ? this.calculateMedian(olderPts.map(p => p.price)) : median;
+        const olderPts  = validHistory.filter(p => p.date < fourteenDaysAgo && p.date >= sixtyDaysAgo);
+        const oldMedian = olderPts.length > 0 ? this.calculateMedian(olderPts.map(p => p.price)) : median60;
         const maxRecent = recentPts.length > 0 ? Math.max(...recentPts.map(p => p.price)) : currentPrice;
 
-        // Spike = price was pushed up >25% above older norm AND current price is below that peak
-        // (store raised price, then "discounted" it back)
-        const spikeThreshold = isVolatile ? 0.40 : 0.25;
-        const hasSpike = maxRecent > oldMedian * (1 + spikeThreshold) && currentPrice < maxRecent * 0.95;
+        const spike14Pct = oldMedian > 0 ? (maxRecent - oldMedian) / oldMedian : 0;
+        const hasSpike = spike14Pct > spikeThresholdPct && currentPrice < maxRecent * 0.95;
 
         // ── Base score ──────────────────────────────────────────────────
-        // Anchored to median: score=50 at median, 100 at ≤ min, 0 at ≥ 2×median
-        // score = clamp(50 * (2 - currentPrice / median), 0, 100)
-        let score = Math.max(0, Math.min(100, 50 * (2 - currentPrice / median)));
+        // Anchored to median60: score=50 at median, 100 at ≤ min, 0 at ≥ 2×median
+        let score = Math.max(0, Math.min(100, 50 * (2 - currentPrice / median60)));
 
-        // Spike penalty (15–30 depending on severity)
-        const spikeSeverity = (maxRecent - oldMedian) / oldMedian;
+        // ── Penalties ───────────────────────────────────────────────────
+        let penalty = 0;
         if (hasSpike) {
-            score = Math.max(0, score - (spikeSeverity > 0.5 ? 30 : 20));
+            const spikePenalty = spike14Pct > 0.5 ? 30 : 20;
+            penalty += spikePenalty;
         }
+        if (isVolatile) {
+            penalty += 5;
+        }
+        score = Math.max(0, score - penalty);
+
+        // ── Reason codes ────────────────────────────────────────────────
+        const reasonCodes: string[] = [];
+        if (isInsufficientHistory) reasonCodes.push('INSUFFICIENT_HISTORY');
+        if (hasSpike)            reasonCodes.push('SPIKE_14D_DETECTED');
+        if (currentPrice <= min30 * 1.05) reasonCodes.push('PRICE_NEAR_MIN30');
+        if (isVolatile)          reasonCodes.push('HIGH_CATEGORY_VOLATILITY');
+
+        // ── Verdict ─────────────────────────────────────────────────────
+        const verdict = score >= 65 ? 'fair' : score >= 40 ? 'warning' : 'risky';
 
         // ── Trend ───────────────────────────────────────────────────────
         const trend = this.computeTrend(validHistory);
 
         // ── Verdict message ─────────────────────────────────────────────
-        const priceVsMedianPct = Math.round((currentPrice - median) / median * 100);
+        const priceVsMedianPct = Math.round((currentPrice - median60) / median60 * 100);
         let messageKey: string;
         let messageParams: { max?: number; pct?: number } | undefined;
 
@@ -178,24 +208,40 @@ export class HonestyCalculator {
         // Legacy fallback message (English)
         const message = `Score: ${Math.round(score)} (key: ${messageKey})`;
 
+        // Legacy alias fields (backward compat)
+        const min90  = Math.min(...prices60);
+        const max90  = Math.max(...prices60);
+
         return {
             score: Math.round(score),
             messageKey,
             messageParams,
             message,
             state: 'analyzed',
+            verdict,
+            reasonCodes,
+            metrics: {
+                median60: Math.round(median60),
+                min30,
+                spike14Pct: Math.round(spike14Pct * 1000) / 1000,
+                penalty,
+            },
             details: {
                 entryCount: validHistory.length,
                 firstSeenAt: validHistory[0]?.date,
                 lastSeenAt: validHistory[validHistory.length - 1]?.date,
-                min90,
-                max90,
-                median90: Math.round(median),
+                min30,
+                median60: Math.round(median60),
                 priceVsMedianPct,
                 trend,
                 isVolatile,
                 hasSpike,
+                // legacy aliases
+                min90,
+                max90,
+                median90: Math.round(median60),
             },
         };
     }
 }
+

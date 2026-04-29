@@ -119,7 +119,8 @@ export class RozetkaAdapter implements IPriceAdapter {
         promoName: null,
         isAvailable: this.getStockStatus(),
         hydrationData: this.getHydrationData(),
-        category: productData.category || this.extractCategoryFromDOM() || 'Загальна' // Зберігаємо категорію
+        category: productData.category || this.extractCategoryFromDOM() || 'Загальна', // Зберігаємо категорію
+        sourceConfidence: productData.category ? 'hydration' : 'dom',
       };
     } catch (error) {
       logger.warn('Failed to parse page data', { error, url: window.location.href });

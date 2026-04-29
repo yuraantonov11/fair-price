@@ -6,6 +6,10 @@ const logger = createLogger('background', { runtime: 'background' });
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// SPA debounce: prevent duplicate GET_HISTORY calls within 500ms per tab
+const lastHistoryCallTs = new Map<number, number>();
+const HISTORY_DEBOUNCE_MS = 500;
+
 const ICON_PATHS = {
   success: 'icons/icon_success.png',
   error: 'icons/icon_error.png',
@@ -70,9 +74,20 @@ export default defineBackground(() => {
         handleSaveProduct(message as SaveProductMessage).then(sendResponse);
         return true;
 
-      case 'GET_HISTORY':
-        handleGetHistory(message as GetHistoryMessage).then(sendResponse);
-        return true;
+      case 'GET_HISTORY': {
+          const tabId = sender?.tab?.id as number | undefined;
+          if (tabId !== undefined) {
+            const last = lastHistoryCallTs.get(tabId) ?? 0;
+            const now = Date.now();
+            if (now - last < HISTORY_DEBOUNCE_MS) {
+              sendResponse({ success: false, data: [], code: 'DEBOUNCED' });
+              return true;
+            }
+            lastHistoryCallTs.set(tabId, now);
+          }
+          handleGetHistory(message as GetHistoryMessage).then(sendResponse);
+          return true;
+      }
 
       case 'SET_ICON':
         handleSetIcon(message as SetIconMessage, sender).then(sendResponse);
@@ -128,7 +143,9 @@ export default defineBackground(() => {
         p_price: Math.round(payload.price),
         p_regular_price: payload.regularPrice ? Math.round(payload.regularPrice) : null,
         p_is_available: payload.isAvailable ?? true,
-        p_promo_name: payload.promoName || null
+        p_promo_name: payload.promoName || null,
+        p_category: payload.category || null,
+        p_source: 'community',
       });
 
       if (error) throw error;
@@ -151,6 +168,7 @@ export default defineBackground(() => {
             regular_price, 
             promo_name,
             valid_from,
+            source,
             products!inner(url)
           `)
           .eq('products.url', msg.payload.url)
@@ -162,7 +180,8 @@ export default defineBackground(() => {
         price: item.price / 100,
         oldPrice: item.regular_price ? item.regular_price / 100 : null,
         promoName: item.promo_name,
-        date: item.valid_from
+        date: item.valid_from,
+        source: item.source ?? 'community',
       }));
 
       return { success: true, data: mappedData };

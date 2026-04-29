@@ -8,6 +8,8 @@ export interface ProductData {
   isAvailable: boolean;
   hydrationData: any | null;
   category?: string;
+  /** V2: how reliably this data was extracted */
+  sourceConfidence?: 'dom' | 'hydration';
 }
 
 export interface IPriceAdapter {

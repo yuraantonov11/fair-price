@@ -51,12 +51,27 @@ export class DniproMAdapter implements IPriceAdapter {
     return hyd?.isAvailable !== undefined ? hyd.isAvailable : true;
   }
 
+  extractCategoryFromDOM(): string | null {
+    // Breadcrumbs: last meaningful crumb before the product name
+    const breadcrumbs = Array.from(
+      document.querySelectorAll('[itemprop="breadcrumb"] a, .breadcrumbs a, .breadcrumb a')
+    );
+    if (breadcrumbs.length > 1) {
+      return breadcrumbs[breadcrumbs.length - 2]?.textContent?.trim() || null;
+    }
+    return null;
+  }
+
   async parseProductPage(): Promise<ProductData | null> {
     try {
       await waitForElement('h1', 8000);
       const currentPrice = this.getCurrentPrice();
 
       if (!currentPrice || currentPrice <= 0) return null;
+
+      const hydData = this.getHydrationData();
+      const sourceConfidence: 'dom' | 'hydration' = hydData ? 'hydration' : 'dom';
+      const category = this.extractCategoryFromDOM() || undefined;
 
       return {
         externalId: this.getProductID() || 'unknown',
@@ -66,7 +81,9 @@ export class DniproMAdapter implements IPriceAdapter {
         regularPrice: this.getOriginalPrice() ? Math.round(this.getOriginalPrice()! * 100) : null,
         promoName: document.querySelector('.badge__text')?.textContent?.trim() || null,
         isAvailable: this.getStockStatus(),
-        hydrationData: this.getHydrationData()
+        hydrationData: hydData,
+        category,
+        sourceConfidence,
       };
     } catch (error) {
       logger.error('Failed to parse Dnipro-M product page', { error, url: window.location.href });
