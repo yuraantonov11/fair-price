@@ -1,3 +1,21 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [2.4.0] - 2026-04-29
+
+### Added
+- Baseline explainability in `PriceChart`: delta-vs-baseline chip with hint text plus focused unit coverage.
+- Optional personalized-pricing baseline check endpoint flow (`CHECK_BASELINE`) with controller/background integration.
+- Shared SPA reinject helper used by `ExtensionController` for more stable anchor recovery and mount placement.
+- Telegram alert channel selection with graceful browser fallback when the Telegram path is disabled.
+
+### Changed
+- Synced release version metadata to `2.4.0` in `package.json` / `package-lock.json` for the next tagged release.
+
 ## [2.3.0] - 2026-04-29
 
 ### Changed
@@ -19,12 +37,6 @@
 - DniproM: show price history widget for all prices (removed >300 UAH filter)
 - DniproM: insert chart widget after .product-buy-info (directly below price/buy button)
 
-# Changelog
-
-All notable changes to this project will be documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [1.2.2] - 2026-04-24
 
