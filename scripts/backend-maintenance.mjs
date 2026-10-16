@@ -5,7 +5,7 @@ const action = process.env.BACKEND_ACTION ?? 'inspect';
 const ref = process.env.SUPABASE_PROJECT_REF;
 const token = process.env.SUPABASE_ACCESS_TOKEN;
 const expectedRef = 'mdqcjgxpvvknpehuqrhl';
-if (!['inspect', 'restore'].includes(action)) throw new Error('Unsupported backend action');
+if (!['inspect', 'restore', 'migration-plan', 'migrate'].includes(action)) throw new Error('Unsupported backend action');
 if (ref !== expectedRef) throw new Error('Project ref differs from the approved existing project');
 if (!token) throw new Error('Missing SUPABASE_ACCESS_TOKEN');
 
@@ -55,4 +55,5 @@ if (project.status === 'ACTIVE_HEALTHY') {
   console.log('Runtime schema columns:', JSON.stringify(metadata));
 } else {
   console.log('Database inspection skipped until project is healthy.');
+  if (['migration-plan', 'migrate'].includes(action)) throw new Error('Migrations require a healthy project');
 }

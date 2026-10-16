@@ -7,7 +7,7 @@ on:
         description: 'Existing project maintenance (never creates or replaces a project)'
         required: false
         type: choice
-        options: [none, inspect, restore]
+        options: [none, inspect, restore, migration-plan, migrate]
         default: none
       run_crawler_smoke:
         description: 'Run crawler smoke test (writes a small sample to Supabase)'
@@ -39,6 +39,25 @@ jobs:
           BACKEND_ACTION: ${{ inputs.backend_action }}
           SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      - name: Setup Supabase CLI for migrations
+        if: ${{ inputs.backend_action == 'migration-plan' || inputs.backend_action == 'migrate' }}
+        uses: supabase/setup-cli@v1
+      - name: Link existing project and show pending migrations
+        if: ${{ inputs.backend_action == 'migration-plan' || inputs.backend_action == 'migrate' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase migration list --linked
+          supabase db push --linked --dry-run
+      - name: Apply pending migrations
+        if: ${{ inputs.backend_action == 'migrate' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: supabase db push --linked --yes
 
   extension-self-check:
     runs-on: ubuntu-latest
