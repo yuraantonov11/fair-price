@@ -1,322 +1,61 @@
-# Інструкція: Серверний краулер цін (crawl-prices)
+# Збір підтверджених цін
 
-## Навіщо це потрібно
+Production використовує Node.js 24+ і `scripts/crawl.mjs`; резервна Edge Function обробляє максимум 20 товарів за запит. Обидва шляхи використовують спільний парсер і серверний `record_price`. Node обходить sitemap Dnipro-M, до 1000 останніх повідомлених URL за 24 години та всі вже відомі товари Rozetka. Для підтвердження він читає сторінку магазину; передану браузером ціну не використовує. Невдале або заблоковане магазином завантаження не перетворюється на підтвердження.
 
-Розширення записує ціну лише тоді, коли **юзер відкриває** сторінку товару.
-Це означає, що новий товар не матиме цінової історії, поки хтось його не відвідає.
+## Підготовка
 
-Краулер вирішує це: він **автоматично обходить весь каталог** Dnipro-M раз на добу
-і записує ціни в ту саму Supabase базу. Після кількох запусків — у базі є реальна
-цінова динаміка для всіх 2500+ товарів.
+Застосуйте всі SQL-міграції з `supabase/migrations` у порядку назв, включно з `20261016_runtime_hardening.sql`. Не створюйте окремі старі версії RPC вручну: актуальна сигнатура має `p_category` і `p_source`, а початкова схема використовує UUID, не BIGSERIAL.
 
-```
-Sitemap (2503 товари)
-  ↓ sitemapParser
-URL-список
-  ↓ priceScraper (batch 20)
-HTML сторінок → ціни
-  ↓ record_price RPC
-Supabase price_history
-  ↓
-Розширення → графік + HonestyScore
+У локальному `.env.local` або середовищі CI:
+
+```text
+SUPABASE_URL=https://your-active-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<server-only key>
 ```
 
----
-
-## Передумови
-
-### 1. Встановити Supabase CLI
+Process environment має пріоритет над `.env.local`, а `.env.local` — над `.env`.
 
 ```powershell
-scoop bucket add supabase https://github.com/supabase/scoop-bucket.git
+npm run doctor:crawl
+node scripts/crawl.mjs --limit 20
+node scripts/crawl.mjs --concurrency 10 --delay 2000 --offset 0
 ```
 
-або через npm:
+Малий smoke теж записує підтверджені дані. Для перевірки без серверних credentials використовуйте `npm run test`.
+
+## Надійність
+
+- Усі ціни — додатні цілі копійки; парсер приймає структуровані Next.js/JSON-LD дані та валюту UAH.
+- Sitemap index обходиться з обмеженням кількості файлів; сторонні домени та redirect відхиляються.
+- Timeout охоплює body; тимчасові HTTP/мережеві помилки повторюються обмежено.
+- Помилки запису або відсутність збережених товарів дають ненульовий exit code. JSON-summary містить `saved`, `failed`, `skipped`.
+- Спільна lease в БД виключає одночасний Node/Edge crawl; release приймає тільки токен власника. Node lease діє до трьох годин, Edge — п’ять хвилин.
+- Щоденне підтвердження зберігається навіть при незмінній ціні. Зміна акції чи наявності також зберігається в історії.
+
+## Резервна Edge Function
+
+Задайте випадковий `CRAWL_TRIGGER_SECRET` у Supabase secrets (і GitHub secret для deploy workflow). Він не має потрапляти до VITE-конфігурації чи розширення.
 
 ```powershell
-npm install -g supabase
+supabase functions deploy crawl-prices --no-verify-jwt
 ```
 
-Перевірити:
+Платформна JWT-перевірка тут вимкнена, але handler **вимагає серверний секрет** у `x-crawl-secret` до доступу до БД. Дозволено лише POST; без секрету — 401, при активному обході — 409. Запит JSON: `{ "limit": 20, "offset": 0 }`.
+
+Приклад виклику з уже налаштованим середовищем:
 
 ```powershell
-supabase --version
+$headers = @{ 'x-crawl-secret' = $env:CRAWL_TRIGGER_SECRET }
+Invoke-RestMethod -Method Post -Uri "$env:SUPABASE_URL/functions/v1/crawl-prices" -Headers $headers -ContentType 'application/json' -Body '{"limit":20}'
 ```
 
-### 2. Прив'язати проект
+Не запускайте повний каталог через Edge: він має обмеження часу/compute. Для повного обходу використовуйте Node workflow.
 
-```powershell
-Set-Location "C:\Users\yuraa\WebstormProjects\fair_price"
-supabase login
-supabase link --project-ref mdqcjgxpvvknpehuqrhl
-```
+## GitHub Actions
 
-`mdqcjgxpvvknpehuqrhl` — це ref твого проекту (видно в URL Supabase Dashboard
-або в `VITE_SUPABASE_URL`).
+- Variable: `SUPABASE_URL` — адреса активного проєкту без fallback на чужий або старий проєкт.
+- Secret: `SUPABASE_SERVICE_ROLE_KEY`.
+- Для Edge deployment: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `CRAWL_TRIGGER_SECRET`.
+- Daily workflow має власну concurrency group; база додатково захищає між Node та Edge.
 
----
-
-## Налаштування: секрети Edge Function
-
-Edge Function потребує **Service Role Key** (не anon key) — він має права
-на запис в будь-яку таблицю.
-
-### Де взяти Service Role Key
-
-1. Відкрий [https://supabase.com/dashboard](https://supabase.com/dashboard)
-2. Вибери свій проект → **Settings** → **API**
-3. Скопіюй **service_role** key (той, що під написом "This key has admin rights…")
-
-### Встановити секрет
-
-```powershell
-supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<твій_service_role_key>
-```
-
-Перевірити, що секрет встановлено:
-
-```powershell
-supabase secrets list
-```
-
-> ⚠️ `SUPABASE_URL` і `SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY`
-> автоматично доступні в Edge Functions як `Deno.env.get(...)`.
-> Не потрібно окремо передавати `SUPABASE_URL`.
-
----
-
-## База даних: створити RPC `record_price`
-
-Edge Function викликає `supabase.rpc('record_price', {...})`.
-Якщо цього RPC ще немає — треба створити в SQL Editor.
-
-Відкрий **Supabase Dashboard → SQL Editor** і виконай:
-
-```sql
--- Таблиця продуктів
-CREATE TABLE IF NOT EXISTS products (
-  id          BIGSERIAL PRIMARY KEY,
-  store_domain TEXT NOT NULL,
-  external_id  TEXT NOT NULL,
-  url          TEXT NOT NULL UNIQUE,
-  name         TEXT NOT NULL,
-  UNIQUE (store_domain, external_id)
-);
-
--- Таблиця цінової історії
-CREATE TABLE IF NOT EXISTS price_history (
-  id           BIGSERIAL PRIMARY KEY,
-  product_id   BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  price        BIGINT NOT NULL,              -- в копійках
-  regular_price BIGINT,                      -- в копійках, може бути NULL
-  is_available  BOOLEAN NOT NULL DEFAULT TRUE,
-  promo_name    TEXT,
-  valid_from    TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
--- Індекс для швидкого пошуку по товару
-CREATE INDEX IF NOT EXISTS idx_price_history_product_id ON price_history(product_id);
-
--- RPC: upsert продукт + додати запис ціни
-CREATE OR REPLACE FUNCTION record_price(
-  p_store_domain  TEXT,
-  p_external_id   TEXT,
-  p_url           TEXT,
-  p_name          TEXT,
-  p_price         BIGINT,
-  p_regular_price BIGINT DEFAULT NULL,
-  p_is_available  BOOLEAN DEFAULT TRUE,
-  p_promo_name    TEXT DEFAULT NULL
-)
-RETURNS void
-LANGUAGE plpgsql
-AS $$
-DECLARE
-  v_product_id BIGINT;
-  v_last_price BIGINT;
-BEGIN
-  -- Upsert продукту
-  INSERT INTO products (store_domain, external_id, url, name)
-  VALUES (p_store_domain, p_external_id, p_url, p_name)
-  ON CONFLICT (store_domain, external_id)
-  DO UPDATE SET url = EXCLUDED.url, name = EXCLUDED.name
-  RETURNING id INTO v_product_id;
-
-  -- Записуємо ціну тільки якщо вона змінилась (або це перший запис)
-  SELECT price INTO v_last_price
-  FROM price_history
-  WHERE product_id = v_product_id
-  ORDER BY valid_from DESC
-  LIMIT 1;
-
-  IF v_last_price IS DISTINCT FROM p_price THEN
-    INSERT INTO price_history (product_id, price, regular_price, is_available, promo_name)
-    VALUES (v_product_id, p_price, p_regular_price, p_is_available, p_promo_name);
-  END IF;
-END;
-$$;
-```
-
----
-
-## Деплой Edge Function
-
-```powershell
-Set-Location "C:\Users\yuraa\WebstormProjects\fair_price"
-supabase functions deploy crawl-prices
-```
-
-Успішний деплой виглядає так:
-```
-✓ Deploying Function crawl-prices ...
-  Deployed Function crawl-prices ...done
-```
-
----
-
-## Тестовий запуск вручну
-
-```powershell
-supabase functions invoke crawl-prices --body '{}'
-```
-
-Або з лімітом URL для перевірки (поки без опції, але можна передати):
-```powershell
-supabase functions invoke crawl-prices --body '{"limit": 5}'
-```
-
-Очікуваний вивід у терміналі:
-```json
-{
-  "saved": 18,
-  "failed": 0,
-  "skipped": 2,
-  "totalUrls": 2503,
-  "durationSeconds": "47.2"
-}
-```
-
-Логи краулера в реальному часі (під час запуску):
-```powershell
-supabase functions logs crawl-prices --tail
-```
-
----
-
-## Налаштування автоматичного запуску (cron)
-
-### Варіант A — GitHub Actions (рекомендовано, безкоштовно)
-
-Додай файл `.github/workflows/crawl.yml`:
-
-```yaml
-name: Crawl Prices
-
-on:
-  schedule:
-    - cron: '0 3 * * *'   # щодня о 03:00 UTC (05:00 Київ)
-  workflow_dispatch:        # ручний запуск через UI
-
-jobs:
-  crawl:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Invoke crawl-prices function
-        run: |
-          curl -X POST \
-            "https://mdqcjgxpvvknpehuqrhl.supabase.co/functions/v1/crawl-prices" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
-            -H "Content-Type: application/json" \
-            -d '{}'
-```
-
-Додай секрет у GitHub: **Repository Settings → Secrets → Actions → New secret**
-- Name: `SUPABASE_SERVICE_ROLE_KEY`
-- Value: твій service_role key
-
-### Варіант B — pg_cron у Supabase Dashboard
-
-1. Dashboard → **Database → Extensions** → увімкни `pg_cron`
-2. **SQL Editor**:
-
-```sql
-SELECT cron.schedule(
-  'crawl-prices-daily',
-  '0 3 * * *',
-  $$
-    SELECT net.http_post(
-      'https://mdqcjgxpvvknpehuqrhl.supabase.co/functions/v1/crawl-prices',
-      '{}',
-      jsonb_build_object('Authorization', 'Bearer ' || current_setting('app.service_role_key'))
-    );
-  $$
-);
-```
-
----
-
-## Перевірка результату
-
-Після запуску перевір у Supabase **Table Editor → price_history**, чи з'явились нові записи:
-
-```sql
--- Скільки товарів в базі
-SELECT COUNT(*) FROM products WHERE store_domain = 'dnipro-m.ua';
-
--- Останні записані ціни
-SELECT p.url, p.name, ph.price / 100.0 AS price_uah, ph.valid_from
-FROM price_history ph
-JOIN products p ON p.id = ph.product_id
-WHERE p.store_domain = 'dnipro-m.ua'
-ORDER BY ph.valid_from DESC
-LIMIT 20;
-
--- Товари з найбільшою кількістю змін ціни
-SELECT p.name, COUNT(ph.id) AS price_changes
-FROM price_history ph
-JOIN products p ON p.id = ph.product_id
-GROUP BY p.id, p.name
-ORDER BY price_changes DESC
-LIMIT 10;
-```
-
----
-
-## Структура файлів краулера
-
-```
-supabase/functions/crawl-prices/
-  index.ts              ← Edge Function (Deno)
-
-src/utils/
-  sitemapParser.ts      ← парсинг sitemap XML
-  priceScraper.ts       ← HTTP-скрапінг ціни зі сторінки
-
-tests/unit/
-  sitemapParser.test.ts ← 4 unit-тести
-  priceScraper.test.ts  ← 4 unit-тести
-```
-
----
-
-## Параметри краулера (налаштовуються в `index.ts`)
-
-| Константа | Значення | Пояснення |
-|---|---|---|
-| `BATCH_SIZE` | 20 | Скільки сторінок одночасно |
-| `DELAY_BETWEEN_BATCHES` | 2000 мс | Пауза між батчами |
-| `REQUEST_TIMEOUT` | 10000 мс | Ліміт часу на одну сторінку |
-| `SITEMAP_URL` | dnipro-m.ua/sitemap_uk.xml | URL sitemap |
-
----
-
-## Troubleshooting
-
-| Проблема | Рішення |
-|---|---|
-| `SUPABASE_SERVICE_ROLE_KEY not set` | `supabase secrets set SUPABASE_SERVICE_ROLE_KEY=...` |
-| `record_price function not found` | Виконай SQL з розділу "База даних" вище |
-| Краулер повертає `saved: 0` | Перевір логи `supabase functions logs crawl-prices --tail` |
-| Timeout при деплої | `supabase functions deploy crawl-prices --no-verify-jwt` |
-| Dnipro-M блокує запити | Збільш `DELAY_BETWEEN_BATCHES` до 5000 мс |
-
+При `ENOTFOUND` перевірте активність проєкту та DNS. При помилці RPC або відсутній таблиці застосуйте потрібні міграції й повторіть `npm run doctor:schema`. Не додавайте service-role key до розширення для обходу помилок доступу.

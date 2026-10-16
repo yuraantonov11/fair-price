@@ -30,7 +30,7 @@ describe('logger', () => {
     logger.error('failure', new Error('boom'));
 
     expect(errorSpy).toHaveBeenCalledTimes(1);
-    const call = errorSpy.mock.calls[0];
+    const call = errorSpy.mock.calls[0]!;
     expect(call[0]).toContain('[FairPrice][test-scope][ERROR]');
     expect(call[2]).toHaveProperty('error.message', 'boom');
   });

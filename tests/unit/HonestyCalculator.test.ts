@@ -25,7 +25,7 @@ describe('HonestyCalculator', () => {
     expect(result.state).toBe('single-price');
     expect(result.messageKey).toBe('calculator.firstPriceSame');
     expect(result.details?.entryCount).toBe(1);
-    expect(result.details?.daysAtObservedPrice).toBe(7);
+    expect(result.details?.daysAtObservedPrice).toBe(0);
     expect(result.reasonCodes).toContain('INSUFFICIENT_HISTORY');
   });
 
@@ -43,8 +43,8 @@ describe('HonestyCalculator', () => {
     expect(result.details?.entryCount).toBe(2);
     expect(result.details?.observedPrices).toBeDefined();
     expect(result.details?.observedPrices?.length).toBe(2);
-    expect(result.details?.observedPrices?.[0].price).toBe(1000);
-    expect(result.details?.observedPrices?.[1].price).toBe(980);
+    expect(result.details?.observedPrices?.[0]?.price).toBe(1000);
+    expect(result.details?.observedPrices?.[1]?.price).toBe(980);
     expect(result.reasonCodes).toContain('INSUFFICIENT_HISTORY');
   });
 
@@ -236,7 +236,8 @@ describe('HonestyCalculator', () => {
       { price: 1020, date: now - 70 * day },
     ];
     const result = HonestyCalculator.calculate(1000, history, 'Загальна');
-    expect(result.state).toBe('analyzed');
+    expect(result.state).toBe('collecting');
+    expect(result.metrics).toBeUndefined();
     expect(result.reasonCodes).toContain('INSUFFICIENT_HISTORY');
   });
 
@@ -254,5 +255,26 @@ describe('HonestyCalculator', () => {
     expect(typeof result.metrics?.min30).toBe('number');
     expect(typeof result.metrics?.spike14Pct).toBe('number');
     expect(typeof result.metrics?.penalty).toBe('number');
+  });
+
+  it('rejects infinite prices and excludes future/community observations', () => {
+    expect(HonestyCalculator.calculate(Infinity, []).state).toBe('invalid');
+    const now = Date.now();
+    expect(HonestyCalculator.calculate(1000, [
+      { price: Infinity, date: now }, { price: 1000, date: now + 86400000 },
+      { price: 1000, date: now, source: 'community' },
+    ]).state).toBe('collecting');
+  });
+  it('does not turn repeated observations on one day into a full analysis', () => {
+    const now = Date.now();
+    const result = HonestyCalculator.calculate(1000, [1, 2, 3].map(() => ({ price: 1000, date: now })));
+    expect(result.state).toBe('single-price');
+    expect(result.metrics).toBeUndefined();
+  });
+  it('does not label a minimum older than 30 days as a 30-day minimum', () => {
+    const now = Date.now();
+    const result = HonestyCalculator.calculate(1000, [40, 45, 50].map(days => ({ price: 1000, date: now - days * 86400000 })));
+    expect(result.state).toBe('collecting');
+    expect(result.metrics).toBeUndefined();
   });
 });

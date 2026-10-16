@@ -38,11 +38,11 @@ export function extractEntries(
 
   let match: RegExpExecArray | null;
   while ((match = urlBlockRegex.exec(xml)) !== null) {
-    const block = match[1];
+    const block = match[1]!;
     const locMatch = block.match(tagRegex('loc'));
     if (!locMatch) continue;
 
-    const loc = locMatch[1].trim();
+    const loc = locMatch[1]!.trim();
     if (!urlFilter(loc)) continue;
 
     const lastmodMatch = block.match(tagRegex('lastmod'));
@@ -50,8 +50,8 @@ export function extractEntries(
 
     entries.push({
       loc,
-      lastmod: lastmodMatch?.[1].trim(),
-      changefreq: changefreqMatch?.[1].trim(),
+      lastmod: lastmodMatch?.[1]?.trim(),
+      changefreq: changefreqMatch?.[1]?.trim(),
     });
   }
 

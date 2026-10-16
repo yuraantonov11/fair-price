@@ -1,127 +1,40 @@
 #!/usr/bin/env node
-/**
- * scripts/agent-doctor.mjs
- *
- * Fast preflight check for local/AI runs.
- * - mode=core: checks env for extension runtime/dev
- * - mode=crawl: checks env for crawler writes to Supabase
- */
-
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-const args = parseArgs(process.argv.slice(2));
-const mode = String(args.mode || 'core');
-
-loadEnvFile('.env');
-loadEnvFile('.env.local');
-
-const checks = [];
-
-checks.push(checkNodeVersion());
-checks.push(checkFile('.env.example', 'missing .env.example template'));
-
-if (mode === 'core') {
-  checks.push(checkAny(['VITE_SUPABASE_URL'], 'VITE_SUPABASE_URL is required for extension background Supabase calls'));
-  checks.push(checkAny(['VITE_SUPABASE_ANON_KEY'], 'VITE_SUPABASE_ANON_KEY is required for extension background Supabase calls'));
-}
-
-if (mode === 'crawl') {
-  checks.push(checkAny(['SUPABASE_URL', 'VITE_SUPABASE_URL'], 'SUPABASE_URL (or VITE_SUPABASE_URL) is required for crawler'));
-  checks.push(checkAny(['SUPABASE_SERVICE_ROLE_KEY'], 'SUPABASE_SERVICE_ROLE_KEY is required for crawler RPC writes'));
-}
-
-const failed = checks.filter((c) => !c.ok);
-
-console.log(`\nFairPrice doctor (mode=${mode})`);
-for (const c of checks) {
-  const mark = c.ok ? 'OK ' : 'ERR';
-  console.log(`[${mark}] ${c.message}`);
-}
-
-if (failed.length > 0) {
-  console.error('\nPreflight failed. Fix ENV/config and rerun.');
-  process.exit(1);
-}
-
-console.log('\nPreflight passed.');
-
-function parseArgs(argv) {
-  const result = {};
-  for (let i = 0; i < argv.length; i++) {
-    if (argv[i].startsWith('--')) {
-      const key = argv[i].slice(2);
-      result[key] = argv[i + 1] || true;
-      i++;
+import { existsSync } from 'node:fs';
+import { lookup } from 'node:dns/promises';
+import { loadLocalEnv } from './env.mjs';
+import { isPublicBackendKey } from '../src/utils/backendConfig.ts';
+loadLocalEnv();
+const mode = process.argv.includes('crawl') ? 'crawl' : 'core';
+const offline = process.argv.includes('--offline');
+const schema = process.argv.includes('--schema');
+let failed = false;
+function check(ok, message) { console.log(`[${ok ? 'OK' : 'ERR'}] ${message}`); failed ||= !ok; }
+check(Number(process.versions.node.split('.')[0]) >= 24, 'Node.js >=24 (native TypeScript crawler runtime)');
+check(existsSync('.env.example'), '.env.example exists');
+const address = mode === 'crawl' ? process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL : process.env.VITE_SUPABASE_URL;
+const key = mode === 'crawl' ? process.env.SUPABASE_SERVICE_ROLE_KEY : process.env.VITE_SUPABASE_ANON_KEY;
+check(Boolean(key && !/your-anon|your-service/.test(key)), `${mode === 'crawl' ? 'Service role' : 'Publishable/anon'} key is configured (value hidden)`);
+if (mode === 'core' && key) check(isPublicBackendKey(key), 'Client key is public (never service-role)');
+try {
+  if (!address || /your-project/.test(address)) throw new Error('Set a real Supabase URL');
+  const url = new URL(address);
+  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === '127.0.0.1')) throw new Error('Use HTTPS (or local E2E backend)');
+  check(true, 'Supabase URL format');
+  if (!offline && key) {
+    await lookup(url.hostname);
+    check(true, `DNS resolves ${url.hostname}`);
+    const response = await fetch(`${url.origin}/rest/v1/${schema ? 'price_observations?select=price,source,observed_at,products!inner(url)&limit=0' : ''}`, {
+      headers: { apikey: key, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000),
+    });
+    check(response.ok, `Supabase ${schema ? 'schema' : 'API'} probe: HTTP ${response.status}`);
+    if (schema && response.ok) {
+      const api = await fetch(`${url.origin}/rest/v1/`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) });
+      const spec = await api.json();
+      const params = spec.paths?.['/rpc/record_price']?.post?.parameters ?? [];
+      const properties = params.flatMap(p => Object.keys(p.schema?.properties ?? {}));
+      check(properties.includes('p_source') && properties.includes('p_category'), 'record_price V2 arguments are exposed');
     }
   }
-  return result;
-}
-
-function loadEnvFile(fileName) {
-  const filePath = resolve(process.cwd(), fileName);
-  if (!existsSync(filePath)) return;
-
-  const content = readFileSync(filePath, 'utf8');
-  for (const rawLine of content.split(/\r?\n/)) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith('#')) continue;
-
-    const eq = line.indexOf('=');
-    if (eq === -1) continue;
-
-    const key = line.slice(0, eq).trim();
-    if (!key || process.env[key] !== undefined) continue;
-
-    let value = line.slice(eq + 1).trim();
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    process.env[key] = value;
-  }
-}
-
-function checkNodeVersion() {
-  const major = parseInt(process.versions.node.split('.')[0], 10);
-  if (Number.isNaN(major) || major < 20) {
-    return {
-      ok: false,
-      message: `Node.js >= 20 required, current=${process.versions.node}`,
-    };
-  }
-  return {
-    ok: true,
-    message: `Node.js version ${process.versions.node}`,
-  };
-}
-
-function checkFile(fileName, failMessage) {
-  const filePath = resolve(process.cwd(), fileName);
-  return existsSync(filePath)
-    ? { ok: true, message: `${fileName} found` }
-    : { ok: false, message: failMessage };
-}
-
-function checkAny(keys, failMessage) {
-  const found = keys.find((k) => {
-    const value = process.env[k];
-    return value !== undefined && String(value).trim().length > 0;
-  });
-
-  if (!found) {
-    return {
-      ok: false,
-      message: `${failMessage} (expected one of: ${keys.join(', ')})`,
-    };
-  }
-
-  return {
-    ok: true,
-    message: `${found} is set`,
-  };
-}
-
+} catch (error) { check(false, `${error.code || error.cause?.code || error.name}: ${error.message}. Check Supabase project status and environment.`); }
+if (offline) console.log('Offline: connectivity and deployed schema were not checked.');
+process.exitCode = failed ? 1 : 0;

@@ -1,6 +1,6 @@
-import { IPriceAdapter, ProductData } from './IPriceAdapter';
+import type { IPriceAdapter, ProductData } from './IPriceAdapter';
 import { waitForAnyElement, parsePrice, queryFirst } from '@/utils/domUtils';
-import {ContentScriptAppendMode} from "wxt/utils/content-script-ui/types";
+import type {ContentScriptAppendMode} from "wxt/utils/content-script-ui/types";
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('RozetkaAdapter', { runtime: 'content', store: 'rozetka.com.ua' });
@@ -34,7 +34,7 @@ export class RozetkaAdapter implements IPriceAdapter {
       const stateScript = scripts.find(s => s.textContent?.includes('window.__INITIAL_STATE__'));
       if (stateScript && stateScript.textContent) {
         const match = stateScript.textContent.match(/window\.__INITIAL_STATE__\s*=\s*({.+});/);
-        if (match) return JSON.parse(match[1]);
+        if (match) return JSON.parse(match[1]!);
       }
     } catch (e) {
       logger.warn('Failed to parse hydration data', { error: e });
@@ -53,7 +53,7 @@ export class RozetkaAdapter implements IPriceAdapter {
       '[data-testid="price"]',
       '[itemprop="price"]',
     ]);
-    return parsePrice(priceEl?.textContent); // парсер повертає UAH
+    return parsePrice(priceEl?.getAttribute('content') ?? priceEl?.textContent); // парсер повертає UAH
   }
 
   getOriginalPrice(): number | null {

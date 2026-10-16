@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - Unreleased
+
+### Fixed
+- Distinguish backend failures from empty price history, preserve error context, and allow retry after transient failures.
+- Discard stale SPA responses and restore the chart safely when stores replace page elements.
+- Calculate history statistics from recent, distinct observation days with consistent UAH/kopeck conversion.
+
+### Security
+- Separate untrusted community reports from crawler observations; restrict privileged writes, feedback, and crawler execution.
+- Remove tracked environment/build metadata and keep credentials out of source archives.
+- Disable unfinished alerts and telemetry ingestion; make optional baseline requests depend on explicit consent.
+
+### Changed
+- Share validated parsing between Node and Edge crawlers, with bounded retries and exclusive database leases.
+- Add SQL access-control tests and isolated browser regressions for backend failures and recovery.
+- Require a reachable backend with the deployed runtime schema before publishing release assets.
+
 ## [2.4.0] - 2026-04-29
 
 ### Added

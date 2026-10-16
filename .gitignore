@@ -4,6 +4,8 @@ node_modules/
 dist/
 build/
 .output/
+.wxt/
+.output-e2e/
 /docs/repomix.md
 .env
 .env.local
@@ -11,3 +13,9 @@ build/
 playwright-report/
 test-results/
 *.xml
+
+.env.*
+!.env.example
+crawl_*.log
+supabase/.temp/
+supabase/.branches/

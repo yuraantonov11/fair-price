@@ -9,14 +9,16 @@
 - `src/core/ExtensionController.ts` is the orchestrator: product detection, `SAVE_PRODUCT`, `GET_HISTORY`, score calculation, icon updates, reinjection on SPA re-renders.
 - `src/entrypoints/background.ts` is the only layer that talks to Supabase for extension runtime.
 - Store parsing lives in adapters (`src/adapters/*`) behind strict interface `src/adapters/IPriceAdapter.ts`.
-- Dnipro-M content UI uses Shadow DOM injector (`src/ui/injector.tsx`); Rozetka mounts directly.
+- Both store entrypoints use the shared Shadow DOM injector (`src/ui/injector.tsx`).
 - Crawler pipeline is Node-first in production (`scripts/crawl.mjs`), Edge Function is backup (`supabase/functions/crawl-prices/index.ts`).
 
 ## Data Contracts (Critical)
 - Adapters and crawler send prices in kopecks (integer).
 - History returned to UI/calculator is converted to UAH in background (`item.price / 100`).
 - Keep this unit split unchanged unless you update all layers together.
-- DB schema source of truth: `supabase/migrations/20260410_init.sql`.
+- DB schema source of truth: all `supabase/migrations/*.sql` in filename order, including `20261016_runtime_hardening.sql`.
+- Browser reports go to private `community_price_reports`. Only service-role observations may populate the trusted daily `price_observations` used for scoring. Do not promote legacy/community rows automatically.
+- Alerts and telemetry ingestion are deferred and fail closed. The Edge crawler requires `x-crawl-secret`; the Node crawler and Edge share a database lease.
 
 ## Logging and Diagnostics Rules
 - In `src/`, use only `createLogger` from `src/utils/logger.ts`.
@@ -38,6 +40,7 @@
   - `SUPABASE_SERVICE_ROLE_KEY`
   - optional `SUPABASE_URL` (otherwise fallback to `VITE_SUPABASE_URL`)
 - Dev browser auto-opens `WXT_START_URL` (default Dnipro-M product URL).
+- Node.js >=24 is required. Online doctor checks DNS/API; `doctor:offline` validates configuration only. E2E builds use `.output-e2e` and a local HTTP backend, never production credentials.
 
 ## Development and Debug Commands
 - Chrome dev: `npm run dev`

@@ -7,7 +7,7 @@ export class HonestyCalculator {
         if (prices.length === 0) return 0;
         const sorted = [...prices].sort((a, b) => a - b);
         const mid = Math.floor(sorted.length / 2);
-        return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+        return sorted.length % 2 !== 0 ? sorted[mid]! : (sorted[mid - 1]! + sorted[mid]!) / 2;
     }
 
     static calculateStdDev(prices: number[], mean: number): number {
@@ -31,10 +31,10 @@ export class HonestyCalculator {
 
     static calculate(
         currentPrice: number,
-        priceHistory: { price: number; date: number }[],
+        priceHistory: { price: number; date: number; source?: string }[],
         category: string = 'unknown',
     ): HonestyResult {
-        if (!currentPrice || currentPrice <= 0) {
+        if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
             return {
                 score: 0,
                 messageKey: 'calculator.invalidPrice',
@@ -45,9 +45,16 @@ export class HonestyCalculator {
             };
         }
 
-        const validHistory = priceHistory
-            .filter(p => p.price > 0 && Number.isFinite(p.date))
+        const now = Date.now();
+        const recent = priceHistory
+            .filter(p => Number.isFinite(p.price) && p.price > 0 && Number.isFinite(p.date)
+                && p.date >= now - 60 * 86_400_000 && p.date <= now
+                && (p.source === undefined || p.source === 'system'))
             .sort((a, b) => a.date - b.date);
+        // One confirmed observation per UTC day; repeated views cannot inflate confidence.
+        const byDay = new Map<string, { price: number; date: number }>();
+        for (const point of recent) byDay.set(new Date(point.date).toISOString().slice(0, 10), point);
+        const validHistory = [...byDay.values()];
 
         if (validHistory.length === 0) {
             return {
@@ -61,13 +68,13 @@ export class HonestyCalculator {
         }
 
         if (validHistory.length === 1) {
-            const pt = validHistory[0];
-            const daysAtObservedPrice = Math.floor(Math.max(0, Date.now() - pt.date) / 86_400_000);
+            const pt = validHistory[0]!;
+            const daysAtObservedPrice = 0; // A single sighting proves no duration of stability.
             const messageKey = currentPrice === pt.price
                 ? 'calculator.firstPriceSame'
                 : 'calculator.firstPriceDiff';
             const message = currentPrice === pt.price
-                ? 'First confirmation: this price has been stable for a while. More conclusions once we collect a few more observations.'
+                ? 'One confirmed price observation. More confirmed days are needed for analysis.'
                 : 'Only one recorded price in history. We can show when it was last seen, but a full analysis needs more observations.';
             return {
                 score: -1,
@@ -102,7 +109,6 @@ export class HonestyCalculator {
         }
 
         // ── Full analysis (3+ entries) ──────────────────────────────────
-        const now = Date.now();
         const sixtyDaysAgo   = now - 60 * 86_400_000;
         const thirtyDaysAgo  = now - 30 * 86_400_000;
         const fourteenDaysAgo = now - 14 * 86_400_000;
@@ -111,15 +117,20 @@ export class HonestyCalculator {
         const window60 = validHistory.filter(p => p.date >= sixtyDaysAgo);
         const window30 = validHistory.filter(p => p.date >= thirtyDaysAgo);
 
-        // Fall back to all history if windows are too thin (< 3 points)
-        const useHistory60 = window60.length >= 3 ? window60 : validHistory;
+        // Metrics use confirmed observations inside their stated windows.
+        const useHistory60 = window60;
         const isInsufficientHistory = window60.length < 3;
 
         const prices60 = useHistory60.map(p => p.price);
         const median60 = this.calculateMedian(prices60);
 
-        // min30: minimum from 30-day window; fall back to 60d window
-        const prices30 = window30.length >= 1 ? window30.map(p => p.price) : prices60;
+        // min30 uses only the 30-day window.
+        if (window30.length === 0) return {
+            score: -1, state: 'collecting', messageKey: 'calculator.collecting',
+            message: 'No confirmed observations in the last 30 days.',
+            reasonCodes: ['INSUFFICIENT_HISTORY'], details: { entryCount: validHistory.length },
+        };
+        const prices30 = window30.map(p => p.price);
         const min30 = Math.min(...prices30);
 
         const mean60 = prices60.reduce((s, p) => s + p, 0) / prices60.length;
@@ -153,7 +164,7 @@ export class HonestyCalculator {
         const hasSpike = spike14Pct > spikeThresholdPct && currentPrice < maxRecent * 0.95;
 
         // ── Base score ──────────────────────────────────────────────────
-        // Anchored to median60: score=50 at median, 100 at ≤ min, 0 at ≥ 2×median
+        // Anchored to median60: score=50 at median, approaching 100 as price approaches zero.
         let score = Math.max(0, Math.min(100, 50 * (2 - currentPrice / median60)));
 
         // ── Penalties ───────────────────────────────────────────────────

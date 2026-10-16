@@ -74,13 +74,25 @@
       "title": "First confirmed price",
       "counter": "1 record",
       "observedPrice": "Observed price",
-      "heldFor": "Held for",
+      "heldFor": "Confirmation",
       "firstSeen": "First seen",
       "datePending": "date pending",
       "footer": "This is only the first observation so far. We can already show how long this price has held, but a reliable discount fairness score needs a few more history records.",
       "lessThanDay": "less than a day",
       "day": "1 day",
-      "days": "{{count}} days"
+      "days": "{{count}} days",
+      "oneObservation": "One observation"
+    },
+    "history": {
+      "loading": "Loading price history…",
+      "empty": "No confirmed price history yet.",
+      "error": "Could not load price history.",
+      "currentPrice": "Current price",
+      "retry": "Retry",
+      "networkHint": "The history service is temporarily unavailable. Please try again later.",
+      "schemaHint": "The history service needs an update. Please try again later.",
+      "accessHint": "The history service declined the request. Please try again later.",
+      "saveWarning": "Could not submit the current price. Showing existing history."
     }
   },
   "popup": {
@@ -104,7 +116,8 @@
       "addSite": "ADD SITE",
       "thanks": "Thank you! 🚀",
       "requestReceived": "Your request has been received.",
-      "sendAnother": "Send another"
+      "sendAnother": "Send another",
+      "failed": "Could not send feedback. Please try again later."
     },
     "language": "Language",
     "alerts": {
@@ -146,7 +159,7 @@
   "calculator": {
     "invalidPrice": "Error: invalid current price.",
     "noHistory": "Just started collecting price history for analysis.",
-    "firstPriceSame": "First confirmation: this price has been stable for a while. More conclusions once we collect a few more observations.",
+    "firstPriceSame": "One confirmed observation. More confirmed days are needed for analysis.",
     "firstPriceDiff": "Only one recorded price in history. We can show when it was last seen, but a full analysis needs more observations.",
     "collecting": "Collecting price history for analysis...",
     "insufficientData": "Not enough valid data for analysis.",

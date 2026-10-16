@@ -1,66 +1,37 @@
-# Privacy Policy — Fair Price Extension
+# Privacy Policy — Fair Price
 
-**Effective date:** 2026-04-22  
-**Extension:** Fair Price / Чесна Ціна  
-**Developer:** Yurii Antonov (yuraantonov11@gmail.com)
+Effective date: 2026-10-16. Developer: Yurii Antonov (yuraantonov11@gmail.com).
 
----
+## Product information
 
-## What data we collect
+On supported Dnipro-M and Rozetka product pages, Fair Price reads the product URL, identifier, name, current/regular price, availability, promotion and category. The background script sends a product report to the configured Supabase project and requests confirmed price history. Query parameters and fragments are excluded from product identity.
 
-Fair Price collects **only product pricing data** necessary to provide its core functionality:
+Browser reports are unverified and stored separately from server-confirmed observations. Trusted daily observations are collected by a server crawler and used for the displayed analysis. Product reports and price history contain no extension-generated user identifier. The service provider receives normal network metadata such as the requesting IP address as part of serving requests; provider logs are subject to its configuration and policy.
 
-| Data | Purpose | Storage |
-|------|---------|---------|
-| Product URL | Identify the product in price history | Supabase cloud database |
-| Product name | Display in price history | Supabase cloud database |
-| Current price | Build price history for analysis | Supabase cloud database |
-| Store domain | Group prices by store | Supabase cloud database |
-| Language preference (EN/UK) | Display UI in your chosen language | Browser local storage (on-device only) |
+## Preferences and optional features
 
-## What we do NOT collect
+Language is stored using browser.storage.sync and may be synchronized by your browser account. Consent preferences are stored in browser.storage.local. Affiliate preferences default to off. No affiliate link rewriting is implemented in this release.
 
-- No personal information (name, email, account)
-- No browsing history beyond supported store product pages
-- No payment or financial data
-- No location data
-- No device identifiers
-- No cookies
+Price alerts are unavailable in this release. Their runtime endpoints are disabled and client access to the legacy alerts table is revoked by the hardening migration. Previous records, if any, remain restricted to the backend operator; contact the developer for deletion.
 
-## How data is used
+Telemetry event ingestion is disabled. An optional baseline endpoint is disabled by default; it requires both explicit stored consent and a configured endpoint. If enabled, it receives the product URL, store and external product identifier. A future public opt-in flow must identify its provider before enabling it for users.
 
-Price data is used exclusively to:
-1. Calculate the Honesty Index shown on product pages.
-2. Build aggregate price history charts visible to all extension users.
-3. Detect artificial price inflation patterns.
+## Feedback
 
-Price data is **not sold**, **not shared** with third parties, and **not used for advertising**.
+Feedback is sent only when you submit it. It includes the selected feedback type, your comment, and the active page origin/path (without query or fragment). Do not include passwords or payment details in comments. Failed submissions are shown as failures.
 
-## Data storage
+## Network and storage
 
-Price history is stored in a Supabase PostgreSQL database hosted in the EU (Frankfurt region). Data is retained indefinitely to provide long-term price history. Records contain no user identifiers — it is impossible to trace any record back to an individual user.
+The extension accesses supported stores and its configured Supabase backend. It uses system fonts and does not request Google Fonts. Opening the privacy policy or issue link navigates to GitHub after your action. The optional baseline endpoint described above is a separate configurable destination.
 
-## Permissions explained
+Supabase stores price reports, observations and submitted feedback in the region chosen for the configured project. Product history is retained for historical analysis; no automatic retention schedule is currently implemented. The developer can delete stored feedback or legacy alert records on request. Supabase is the infrastructure provider; see https://supabase.com/privacy.
 
-| Permission | Reason |
-|-----------|--------|
-| `storage` | Save your language preference (EN/UK) locally on your device |
-| Host: `*://dnipro-m.ua/*` | Read product prices from Dnipro-M product pages |
-| Host: `*://rozetka.com.ua/*` | Read product prices from Rozetka product pages |
-| Host: `*://*.supabase.co/*` | Send/retrieve price data to/from the price history database |
+The extension does not read store account credentials, payment details, cookies, or unrelated page content. Its normal automatic product-reporting flow runs on supported product pages; server crawls run independently of your browser.
 
-No other hosts are accessed. The extension does not make any requests in the background when you are not visiting a supported store.
+## Permissions
 
-## Third-party services
-
-The extension uses [Supabase](https://supabase.com) as its backend. Supabase's privacy policy applies to data stored there: https://supabase.com/privacy
-
-## Changes to this policy
-
-If this policy changes materially, the extension version will be incremented and the changelog will note the update.
+`storage` saves preferences. Store host permissions allow content scripts to read product information. Backend host permission allows sending reports and loading history. Firefox declares browsing activity and website content because URLs and product information are transmitted. No browser notification permission is requested while alerts are deferred.
 
 ## Contact
 
-Questions or data deletion requests: yuraantonov11@gmail.com  
-GitHub: https://github.com/yuraantonov11/fair_price/issues
-
+Questions and deletion requests: yuraantonov11@gmail.com. Material policy changes will be reflected in this document and release notes.

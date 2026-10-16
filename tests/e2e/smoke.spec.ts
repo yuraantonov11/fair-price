@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const extensionPath = path.resolve(process.cwd(), '.output/chrome-mv3');
+const extensionPath = path.resolve(process.cwd(), '.output-e2e/chrome-mv3');
 
 test.describe('extension smoke', () => {
-  test.skip(!fs.existsSync(extensionPath), 'Build the extension first: npm run build');
+  test.beforeAll(() => expect(fs.existsSync(extensionPath), 'Run npm run build:e2e').toBe(true));
+  test.beforeEach(async () => { await fetch('http://127.0.0.1:38765/control'); });
 
   async function launchExtensionContext(): Promise<{ context: BrowserContext; page: Page }> {
     const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fair-price-pw-'));
@@ -69,9 +70,9 @@ test.describe('extension smoke', () => {
 
     await expect
       .poll(async () => {
-        return mount.evaluate((node) => node.shadowRoot?.textContent || '');
+        return mount.locator('.fair-price-app').innerText();
       }, { timeout: 10_000 })
-      .toMatch(/First confirmed price|Є перша підтверджена ціна|Honesty index|Індекс чесності/);
+      .toMatch(/First confirmed price|Є перша підтверджена ціна|Honesty index|Індекс чесності/i);
   }
 
   test('Dnipro-M: injects widget and restores after mount removal', async () => {
@@ -107,6 +108,67 @@ test.describe('extension smoke', () => {
     } finally {
       await context.close();
     }
+  });
+
+  for (const scenario of ['schema', 'access', 'network'] as const) {
+    test(`Dnipro-M: ${scenario} failure is visible and retry recovers`, async () => {
+      await fetch(`http://127.0.0.1:38765/control?failure=${scenario}`);
+      const { context, page } = await launchExtensionContext();
+      await page.route('https://dnipro-m.ua/tovar/**', route => route.fulfill({ contentType: 'text/html', body: dniproFixture() }));
+      try {
+        await page.goto('https://dnipro-m.ua/tovar/fp-test-product/');
+        await expect(page.locator('[data-history-state="error"]')).toBeVisible({ timeout: 15000 });
+        await expect(page.getByRole('alert')).toContainText(/Could not load|Не вдалося завантажити/);
+        const stats = await (await fetch('http://127.0.0.1:38765/stats')).json();
+        expect(stats.historyCalls).toBe(scenario === 'network' ? 3 : 1);
+        await fetch('http://127.0.0.1:38765/control');
+        await page.getByRole('button', { name: /Retry|Повторити/ }).click();
+        await expectWidgetInjected(page);
+        await expect(page.locator('[data-history-state="error"]')).toHaveCount(0);
+      } finally { await context.close(); }
+    });
+  }
+
+  test('successful empty history is distinct from backend failure', async () => {
+    await fetch('http://127.0.0.1:38765/control?empty=1');
+    const { context, page } = await launchExtensionContext();
+    await page.route('https://dnipro-m.ua/tovar/**', route => route.fulfill({ contentType: 'text/html', body: dniproFixture() }));
+    try {
+      await page.goto('https://dnipro-m.ua/tovar/fp-test-product/');
+      await expect(page.locator('[data-history-state="empty"]')).toBeVisible();
+      await expect(page.getByRole('button', { name: /Retry|Повторити/ })).toHaveCount(0);
+    } finally { await context.close(); }
+  });
+
+  test('a failed submission still displays existing trusted history', async () => {
+    await fetch('http://127.0.0.1:38765/control?saveFails=1');
+    const { context, page } = await launchExtensionContext();
+    await page.route('https://dnipro-m.ua/tovar/**', route => route.fulfill({ contentType: 'text/html', body: dniproFixture() }));
+    try {
+      await page.goto('https://dnipro-m.ua/tovar/fp-test-product/');
+      await expectWidgetInjected(page);
+      await expect(page.getByRole('status')).toContainText(/Could not submit|Не вдалося надіслати/);
+    } finally { await context.close(); }
+  });
+
+  test('SPA navigation discards a slow response for the previous product', async () => {
+    await fetch('http://127.0.0.1:38765/control?delayFirst=1');
+    const { context, page } = await launchExtensionContext();
+    await page.route('https://dnipro-m.ua/tovar/**', route => route.fulfill({ contentType: 'text/html', body: dniproFixture() }));
+    try {
+      await page.goto('https://dnipro-m.ua/tovar/first/');
+      await expect.poll(async () => (await (await fetch('http://127.0.0.1:38765/stats')).json()).historyCalls).toBe(1);
+      await page.evaluate(() => {
+        history.pushState({}, '', '/tovar/second/');
+        document.querySelector('h1')!.textContent = 'Second product';
+        document.querySelector('.product-price__current')!.textContent = '7 777 ₴';
+      });
+      await expectWidgetInjected(page);
+      await expect(page.locator('#fair-price-container .fair-price-app')).toContainText('7777');
+      await expect.poll(async () => (await (await fetch('http://127.0.0.1:38765/stats')).json()).completedFirst).toBe(true);
+      await expect(page.locator('#fair-price-container .fair-price-app')).toContainText('7777');
+      await expect(page.locator('#fair-price-container')).toHaveCount(1);
+    } finally { await context.close(); }
   });
 });
 

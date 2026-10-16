@@ -10,9 +10,15 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     },
-    "types": ["chrome", "wxt"]
+    "types": [
+      "chrome",
+      "wxt"
+    ],
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src/**/*",

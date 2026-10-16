@@ -45,7 +45,7 @@ function generatePriceByScenario(
   if (count <= 1) return basePrice;
 
   const progress = index / (count - 1);
-  const wave = [0, -0.02, 0.015, -0.01, 0.01][index % 5];
+  const wave = [0, -0.02, 0.015, -0.01, 0.01][index % 5]!;
 
   if (scenario === 'discount') {
     const multiplier = 1.35 - progress * 0.35;
@@ -59,7 +59,7 @@ function generatePriceByScenario(
   }
 
   if (scenario === 'volatile') {
-    const volatileWave = [1.0, 0.9, 1.08, 0.94, 1.13, 0.96][index % 6];
+    const volatileWave = [1.0, 0.9, 1.08, 0.94, 1.13, 0.96][index % 6]!;
     return Math.round(basePrice * volatileWave);
   }
 

@@ -45,7 +45,7 @@ export interface TrackEventMessage {
 
 export interface SetConsentMessage {
     type: 'SET_CONSENT';
-    payload: { affiliateEnabled: boolean };
+    payload: { affiliateEnabled?: boolean; telemetryEnabled?: boolean };
 }
 
 export interface GetConsentMessage {
@@ -73,4 +73,7 @@ export type ExtensionMessage =
     | TrackEventMessage
     | SetConsentMessage
     | GetConsentMessage
-    | CheckBaselineMessage;
+    | CheckBaselineMessage
+    | { type: 'SEND_FEEDBACK'; payload: { type: 'suggestion' | 'bug'; url: string; comment: string } };
+
+export type TracedMessage = ExtensionMessage & { traceId?: string };

@@ -5,6 +5,7 @@ on:
     branches: [ main ]
     paths:
       - 'supabase/functions/crawl-prices/**'
+      - 'supabase/functions/_shared/**'
       - '.github/workflows/deploy-crawler.yml'
   workflow_dispatch:
 
@@ -21,12 +22,21 @@ jobs:
         uses: supabase/setup-cli@v1
 
       - name: Link Supabase project
-        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      - name: Configure crawler authentication
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          CRAWL_TRIGGER_SECRET: ${{ secrets.CRAWL_TRIGGER_SECRET }}
+        run: |
+          if [ -z "$CRAWL_TRIGGER_SECRET" ]; then echo "Missing CRAWL_TRIGGER_SECRET"; exit 1; fi
+          supabase secrets set CRAWL_TRIGGER_SECRET="$CRAWL_TRIGGER_SECRET"
 
       - name: Deploy function
-        run: npx supabase functions deploy crawl-prices --no-verify-jwt
+        run: supabase functions deploy crawl-prices --no-verify-jwt
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
@@ -34,8 +44,5 @@ jobs:
       - name: Verify deployment
         run: |
           echo "✅ Function deployed successfully"
-          echo "To invoke manually:"
-          echo "npx supabase functions invoke crawl-prices --body '{}'"
-          echo ""
-          echo "To view logs:"
-          echo "npx supabase functions logs crawl-prices --tail"
+          echo "Invoke with POST and x-crawl-secret; see docs/crawl-prices.md"
+          echo "Apply database migrations before enabling the crawler"

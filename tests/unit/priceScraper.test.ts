@@ -1,53 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-/**
- * Test the server-side HTML parsing functions from priceScraper.
- * We test the internal parsing logic by calling the exported scrapeProductPage
- * with a mock fetch, but since the module uses global fetch,
- * we test the parsing helpers indirectly via known HTML patterns.
- */
-
-// Inline the parsing logic to test without network
-function parseNextData(html: string) {
-  const match = html.match(/<script\s+id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
-  if (!match) return null;
-  try {
-    const data = JSON.parse(match[1]);
-    const product = data?.props?.pageProps?.product;
-    if (!product || !product.price) return null;
-    return {
-      externalId: String(product.id || 'unknown'),
-      name: product.title || 'Unknown',
-      price: Math.round(parseFloat(product.price) * 100),
-      regularPrice: product.oldPrice ? Math.round(parseFloat(product.oldPrice) * 100) : null,
-      isAvailable: product.isAvailable ?? true,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function parseJsonLd(html: string) {
-  const ldRegex = /<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/g;
-  let match: RegExpExecArray | null;
-  while ((match = ldRegex.exec(html)) !== null) {
-    try {
-      const data = JSON.parse(match[1]);
-      const product = Array.isArray(data)
-        ? data.find((d: any) => d['@type'] === 'Product')
-        : data['@type'] === 'Product' ? data : null;
-      if (!product?.offers?.price) continue;
-      return {
-        externalId: product.sku || product.productID || 'unknown',
-        name: product.name || 'Unknown',
-        price: Math.round(parseFloat(product.offers.price) * 100),
-        regularPrice: null,
-        isAvailable: product.offers?.availability?.includes('InStock') ?? true,
-      };
-    } catch { continue; }
-  }
-  return null;
-}
+// Fixtures exercise the exact shared parser used by Node and Edge.
+import { parseProductHtml } from '../../supabase/functions/_shared/crawler';
+const parseNextData = (html: string) => parseProductHtml(html, 'https://dnipro-m.ua/tovar/test/');
+const parseJsonLd = parseNextData;
 
 describe('priceScraper parsing', () => {
   it('extracts product from __NEXT_DATA__', () => {

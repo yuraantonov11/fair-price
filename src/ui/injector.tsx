@@ -1,18 +1,21 @@
 import React from 'react';
-import { createRoot, Root } from 'react-dom/client';
+import { createRoot, type Root } from 'react-dom/client';
 import { I18nextProvider } from 'react-i18next';
-import { HonestyResult } from '@/core/HonestyCalculator';
+import type { HonestyResult } from '@/core/HonestyCalculator';
 import { PriceChart } from './components/PriceChart';
 import tailwindStyles from '@/ui/styles.css?inline';
 import { createLogger } from '@/utils/logger';
 import i18nInstance, { initLanguage, watchLanguage } from '@/utils/i18n';
+import type { HistoryPoint, HistoryView } from '@/types/runtime';
 
 const logger = createLogger('injector', { runtime: 'content', area: 'ui' });
 
 let reactRoot: Root | null = null;
 let mountContainer: HTMLElement | null = null;
 let reactContainer: HTMLElement | null = null;
-let currentHistory: any[] | null = null;
+let currentHistory: HistoryPoint[] | null = null;
+let currentView: HistoryView | undefined;
+let renderGeneration = 0;
 let currentHonesty: HonestyResult | null = null;
 let currentStore: string | undefined = undefined;
 let unwatchLang: (() => void) | null = null;
@@ -30,30 +33,34 @@ function renderChart() {
   if (!reactRoot || !currentHistory || !currentHonesty) return;
   reactRoot.render(
     <I18nextProvider i18n={i18nInstance}>
-      <PriceChart data={currentHistory} honesty={currentHonesty} store={currentStore} />
+      <PriceChart data={currentHistory} honesty={currentHonesty} store={currentStore} view={currentView} />
     </I18nextProvider>
   );
 }
 
 export async function injectUI(
     targetContainer: HTMLElement,
-    history: any[],
+    history: HistoryPoint[],
     honesty: HonestyResult,
-    store?: string
+    store?: string,
+    view?: HistoryView,
 ) {
     try {
         const targetChanged = mountContainer !== targetContainer;
         if (targetChanged && mountContainer) {
             cleanupUI();
         }
+        const generation = ++renderGeneration;
 
         // Load persisted language before first render
         await initLanguage();
+        if (generation !== renderGeneration || !targetContainer.isConnected) return;
 
         mountContainer = targetContainer;
         currentHistory = history;
         currentHonesty = honesty;
         currentStore = store;
+        currentView = view;
 
         mountContainer.id = 'fair-price-container';
         mountContainer.style.cssText = 'width: 100%; display: block;';
@@ -91,11 +98,13 @@ export async function injectUI(
 }
 
 export function cleanupUI() {
+    ++renderGeneration;
     if (unwatchLang) { unwatchLang(); unwatchLang = null; }
     if (reactRoot) { reactRoot.unmount(); reactRoot = null; }
     if (reactContainer) { reactContainer.remove(); reactContainer = null; }
     currentHistory = null;
     currentHonesty = null;
     currentStore = undefined;
+    currentView = undefined;
     mountContainer = null;
 }

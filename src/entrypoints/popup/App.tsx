@@ -1,152 +1,33 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import '@/utils/i18n';
+import { MessageRouter } from '@/core/MessageRouter';
+import type { ConsentState } from '@/types/runtime';
 import { setLanguage, getLanguage, initLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/utils/i18n';
 
 const LANG_LABELS: Record<SupportedLanguage, string> = { en: 'EN', uk: 'UK' };
 
-// ── Alerts Tab ────────────────────────────────────────────────
-interface PriceAlert { id: string; targetPrice: number; channel: string; createdAt: string }
-
-const AlertsTab = ({ currentUrl, isSupportedStore }: { currentUrl: string; isSupportedStore: boolean }) => {
-    const { t } = useTranslation();
-    const [alerts, setAlerts] = useState<PriceAlert[]>([]);
-    const [targetPrice, setTargetPrice] = useState('');
-    const [channel, setChannel] = useState<'browser' | 'telegram'>('browser');
-    const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-    const [errorMsg, setErrorMsg] = useState('');
-    const [fallbackNote, setFallbackNote] = useState('');
-
-    const loadAlerts = () => {
-        if (!currentUrl || !isSupportedStore) return;
-        browser.runtime.sendMessage({ type: 'GET_ALERTS', payload: { url: currentUrl } })
-            .then((res: any) => { if (res?.success) setAlerts(res.data ?? []); });
-    };
-
-    useEffect(loadAlerts, [currentUrl, isSupportedStore]);
-
-    const saveAlert = async () => {
-        const price = parseFloat(targetPrice);
-        if (!price || price <= 0) return;
-        setStatus('saving');
-        setFallbackNote('');
-        const res: any = await browser.runtime.sendMessage({
-            type: 'SAVE_ALERT',
-            payload: { url: currentUrl, targetPrice: price, channel },
-        });
-        if (res?.success) {
-            setStatus('saved');
-            setTargetPrice('');
-            loadAlerts();
-            if (res?.data?.fallbackApplied) {
-                setFallbackNote(t('popup.alerts.telegramFallback'));
-            }
-            setTimeout(() => setStatus('idle'), 2500);
-        } else {
-            setStatus('error');
-            setErrorMsg(res?.error ?? 'unknown');
-        }
-    };
-
-    const deleteAlert = async (alertId: string) => {
-        await browser.runtime.sendMessage({ type: 'DELETE_ALERT', payload: { alertId } });
-        setAlerts(prev => prev.filter(a => a.id !== alertId));
-    };
-
-    if (!isSupportedStore) {
-        return (
-            <div className="fp-glass p-4 text-center">
-                <p className="text-xs text-slate-400">{t('popup.alerts.unsupported')}</p>
-            </div>
-        );
-    }
-
-    return (
-        <div className="space-y-3">
-            <div className="fp-glass p-3">
-                <p className="fp-title mb-1">{t('popup.alerts.title')}</p>
-                <p className="text-[10px] text-slate-400 mb-2">{t('popup.alerts.subtitle')}</p>
-                <div className="flex gap-2 mb-2">
-                    <select
-                        value={channel}
-                        onChange={e => setChannel(e.target.value as 'browser' | 'telegram')}
-                        className="bg-slate-900/80 border border-white/12 rounded-lg px-2 py-1 text-[11px] text-slate-100 outline-none focus:border-cyan-400"
-                    >
-                        <option value="browser">{t('popup.alerts.channelBrowser')}</option>
-                        <option value="telegram">{t('popup.alerts.channelTelegram')}</option>
-                    </select>
-                    <span className="text-[10px] text-slate-500 self-center">{t('popup.alerts.channelLabel')}</span>
-                </div>
-
-                <div className="flex gap-2">
-                    <input
-                        type="number"
-                        min="1"
-                        className="flex-1 bg-slate-900/80 border border-white/12 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-cyan-400 text-slate-100 placeholder-slate-500"
-                        placeholder={t('popup.alerts.targetPricePlaceholder')}
-                        value={targetPrice}
-                        onChange={e => { setTargetPrice(e.target.value); setStatus('idle'); }}
-                    />
-                    <button
-                        onClick={saveAlert}
-                        disabled={status === 'saving' || !targetPrice}
-                        className="bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-slate-900 text-[10px] font-bold px-3 rounded-lg transition-colors whitespace-nowrap"
-                    >
-                        {status === 'saving' ? t('popup.alerts.saving') : t('popup.alerts.saveBtn')}
-                    </button>
-                </div>
-                {status === 'saved' && <p className="text-[10px] text-emerald-400 mt-1.5">{t('popup.alerts.saved')}</p>}
-                {fallbackNote && <p className="text-[10px] text-amber-300 mt-1.5">{fallbackNote}</p>}
-                {status === 'error' && <p className="text-[10px] text-rose-400 mt-1.5">{t('popup.alerts.error', { msg: errorMsg })}</p>}
-            </div>
-
-            {alerts.length > 0 ? (
-                <div className="fp-glass p-3 space-y-1.5">
-                    <p className="fp-title mb-1">{t('popup.alerts.activeAlerts')}</p>
-                    {alerts.map(a => (
-                        <div key={a.id} className="flex items-center justify-between bg-slate-800/60 rounded-lg px-2.5 py-1.5">
-                            <span className="text-xs text-slate-200">
-                                {t('popup.alerts.below', { price: a.targetPrice })}
-                                {' · '}
-                                {a.channel === 'telegram' ? t('popup.alerts.channelTelegram') : t('popup.alerts.channelBrowser')}
-                            </span>
-                            <button
-                                onClick={() => deleteAlert(a.id)}
-                                className="text-[10px] text-slate-400 hover:text-rose-400 font-bold ml-2 transition-colors"
-                            >
-                                {t('popup.alerts.deleteBtn')}
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            ) : (
-                <p className="text-[10px] text-slate-500 text-center py-2">{t('popup.alerts.noAlerts')}</p>
-            )}
-        </div>
-    );
-};
-
 // ── Settings Tab ──────────────────────────────────────────────
 const SettingsTab = () => {
     const { t } = useTranslation();
-    const [affiliateEnabled, setAffiliateEnabled] = useState<boolean>(true);
+    const [affiliateEnabled, setAffiliateEnabled] = useState<boolean>(false);
     const [loaded, setLoaded] = useState(false);
 
     useEffect(() => {
-        browser.runtime.sendMessage({ type: 'GET_CONSENT', payload: {} })
-            .then((res: any) => {
-                if (res?.success) setAffiliateEnabled(res.affiliateEnabled ?? true);
+        MessageRouter.send<ConsentState>({ type: 'GET_CONSENT', payload: {} })
+            .then(res => {
+                if (res?.success) setAffiliateEnabled(res.data?.affiliateEnabled === true);
                 setLoaded(true);
-            });
+            }).catch(() => setLoaded(true));
     }, []);
 
     const toggleConsent = async () => {
         const next = !affiliateEnabled;
-        setAffiliateEnabled(next);
-        await browser.runtime.sendMessage({
+        const result = await MessageRouter.send({
             type: 'SET_CONSENT',
             payload: { affiliateEnabled: next },
         });
+        if (result.success) setAffiliateEnabled(next);
     };
 
     if (!loaded) return <div className="flex items-center justify-center py-8"><div className="w-4 h-4 rounded-full border-2 border-cyan-400/50 border-t-cyan-400 animate-spin" /></div>;
@@ -196,10 +77,11 @@ const SettingsTab = () => {
 // ── Main App ──────────────────────────────────────────────────
 export default function App() {
     const { t } = useTranslation();
-    const [activeTab, setActiveTab] = useState<'status' | 'alerts' | 'settings'>('status');
+    const [activeTab, setActiveTab] = useState<'status' | 'settings'>('status');
     const [currentUrl, setCurrentUrl] = useState('');
     const [suggestion, setSuggestion] = useState('');
     const [isSent, setIsSent] = useState(false);
+    const [feedbackError, setFeedbackError] = useState('');
     const [lang, setLang] = useState<SupportedLanguage>(getLanguage());
 
     const hostname = (() => {
@@ -210,11 +92,11 @@ export default function App() {
         }
     })();
 
-    const isSupportedStore = currentUrl.includes('rozetka') || currentUrl.includes('dnipro-m');
+    const isSupportedStore = ['rozetka.com.ua', 'dnipro-m.ua'].includes(hostname.replace(/^www\./, ''));
 
     useEffect(() => {
         browser.tabs.query({ active: true, currentWindow: true }).then(tabs => {
-            setCurrentUrl(tabs[0].url || '');
+            setCurrentUrl(tabs[0]?.url || '');
         });
         initLanguage().then(() => setLang(getLanguage()));
     }, []);
@@ -225,12 +107,15 @@ export default function App() {
     };
 
     const sendFeedback = async (type: 'suggestion' | 'bug') => {
-        await browser.runtime.sendMessage({
-            type: 'SEND_FEEDBACK',
-            payload: { type, url: currentUrl, comment: suggestion }
-        });
-        setIsSent(true);
-        setSuggestion('');
+        setFeedbackError('');
+        try {
+            const result = await MessageRouter.send({
+                type: 'SEND_FEEDBACK',
+                payload: { type, url: currentUrl, comment: suggestion }
+            });
+            if (result?.success) { setIsSent(true); setSuggestion(''); }
+            else setFeedbackError(t('popup.feedback.failed'));
+        } catch { setFeedbackError(t('popup.feedback.failed')); }
     };
 
     return (
@@ -255,10 +140,10 @@ export default function App() {
                     </div>
                 </div>
 
-                <div className="relative mt-3 p-1 rounded-lg border border-white/18 bg-slate-900/25 grid grid-cols-3 gap-1">
+                <div className="relative mt-3 p-1 rounded-lg border border-white/18 bg-slate-900/25 grid grid-cols-2 gap-1">
                     {([
                         ['status',   t('popup.tabs.status')],
-                        ['alerts',   t('popup.alerts.tab')],
+
                         ['settings', t('popup.settings.tab')],
                     ] as const).map(([tab, label]) => (
                         <button
@@ -308,6 +193,7 @@ export default function App() {
                             </div>
                         )}
 
+                        {feedbackError && <p role="alert" className="text-xs text-rose-300">{feedbackError}</p>}
                         {/* Feedback mini-form inline on status tab */}
                         <div className="fp-glass p-3">
                             <p className="text-[10px] text-slate-400 mb-2">{t('popup.feedback.prompt')}</p>
@@ -336,10 +222,6 @@ export default function App() {
                             )}
                         </div>
                     </div>
-                )}
-
-                {activeTab === 'alerts' && (
-                    <AlertsTab currentUrl={currentUrl} isSupportedStore={isSupportedStore} />
                 )}
 
                 {activeTab === 'settings' && <SettingsTab />}

@@ -10,6 +10,10 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: daily-price-crawler
+  cancel-in-progress: false
+
 jobs:
   crawl:
     runs-on: ubuntu-latest
@@ -40,13 +44,10 @@ jobs:
 
       - name: Run crawler script
         env:
-          SUPABASE_URL: ${{ vars.SUPABASE_URL || 'https://mdqcjgxpvvknpehuqrhl.supabase.co' }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          CRAWL_LIMIT: ${{ inputs.limit }}
         run: |
-          if [ -n "${{ github.event.inputs.limit }}" ]; then
-            echo "Running test crawl with limit=${{ github.event.inputs.limit }}"
-            node scripts/crawl.mjs --limit "${{ github.event.inputs.limit }}"
-          else
-            echo "Running full crawl"
-            node scripts/crawl.mjs
-          fi
+          if [ -z "$SUPABASE_URL" ]; then echo "Missing GitHub variable SUPABASE_URL"; exit 1; fi
+          npm run doctor:crawl
+          node scripts/crawl.mjs

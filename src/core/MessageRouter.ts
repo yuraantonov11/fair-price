@@ -1,12 +1,16 @@
 /**
  * MessageRouter: Керування асинхронним обміном даними між воркером та скриптами.
  */
-export class MessageRouter {
-    static async send(message: any) {
-        return await browser.runtime.sendMessage(message);
-    }
+import type { TracedMessage } from '@/types/messages';
+import type { RuntimeResponse } from '@/types/runtime';
+import { runtimeFailure } from '@/utils/runtimeErrors';
 
-    static onMessage(callback: (message: any, sender: any, sendResponse: any) => void) {
-        browser.runtime.onMessage.addListener(callback);
+export class MessageRouter {
+    static async send<T = unknown>(message: TracedMessage): Promise<RuntimeResponse<T>> {
+        try {
+            return await browser.runtime.sendMessage(message) as RuntimeResponse<T>;
+        } catch (error) {
+            return runtimeFailure(error, 'MESSAGE_FAILED');
+        }
     }
 }

@@ -1,191 +1,108 @@
-# Чесна Ціна (Fair Price) Extension
+# Чесна Ціна / Fair Price
 
-Розширення для браузера, яке допомагає перевіряти чесність ціни (наприклад, розрахунок ціни за одиницю товару).
+Браузерне розширення WXT + React для Dnipro-M та Rozetka: історія підтверджених цін, попередній аналіз і оцінка поточної ціни.
 
-## Структура проекту (WXT + Vite)
+## Запуск
 
-Проект використовує фреймворк [WXT](https://wxt.dev/) для сучасної розробки розширень, React 19 та TailwindCSS 4.
-
-### Основні директорії:
-- `wxt.config.ts`: Конфігурація проекту та маніфесту.
-- `src/entrypoints/`: Точки входу розширення (Popup, Background, Content Scripts).
-  - `popup/`: UI спливаючого вікна (React).
-  - `background.js`: Service worker.
-  - `content.ts`: Скрипт, що ін'єктується на веб-сторінки.
-- `src/core/`: Бізнес-логіка (адаптери магазинів, розрахунок чесності).
-- `src/ui/`: Компоненти інтерфейсу (Shadow DOM ін'єктор).
-
-## Швидкий старт (людина + AI агент)
-
-1.  **Встановіть залежності**:
-    ```powershell
-    npm run setup
-    ```
-    *Примітка: Переконайтеся, що ви використовуєте Node.js LTS версії (v20+ рекомендується для React 19).*
-
-2. **Підготуйте змінні оточення**:
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-   Заповніть `VITE_SUPABASE_URL` і `VITE_SUPABASE_ANON_KEY`.
-
-3. **Перевірте preflight**:
-   ```powershell
-   npm run doctor
-   ```
-
-4.  **Запустіть режим розробки**:
-    ```powershell
-    npm run dev
-    ```
-    Ця команда:
-    - Збере проект.
-    - Відкриє окремий екземпляр Chrome з автоматично завантаженим розширенням.
-    - Забезпечить HMR (миттєве оновлення при зміні коду).
-
-    *Якщо браузер не відкрився автоматично, перевірте консоль на наявність помилок.*
-
-### Налаштування середовища
-
-1. Скопіюйте змінні оточення з шаблону:
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-2. Заповніть `VITE_SUPABASE_URL` та `VITE_SUPABASE_ANON_KEY`.
-   - Домен Supabase вже дозволений у `host_permissions` (`*://*.supabase.co/*`).
-3. Для Firefox (опційно) задайте `WXT_FIREFOX_BINARY`, якщо шлях відрізняється від дефолтного в `wxt.config.ts`.
-4. За потреби змініть `WXT_START_URL` (за замовчуванням відкривається сторінка Dnipro-M товару при `npm run dev`).
-5. Для керування шумом логів задайте `VITE_LOG_LEVEL` (`debug` | `info` | `warn` | `error` | `silent`).
-6. Для crawler-режиму додайте `SUPABASE_SERVICE_ROLE_KEY` (і за бажанням `SUPABASE_URL`).
-
-### Автономна перевірка для AI агента
+Потрібні **Node.js 24+** та активний проєкт Supabase.
 
 ```powershell
-npm run verify:agent
+npm run setup
+Copy-Item .env.example .env
+# Заповніть VITE_SUPABASE_URL та VITE_SUPABASE_ANON_KEY.
+npm run doctor
+npm run doctor:schema
+npm run dev
 ```
 
-Це виконує: preflight (`doctor`) -> typecheck -> unit tests -> log policy check -> build.
+Якщо `.env` уже існує, збережіть його налаштування. Файл залишається локальним і не відстежується Git. `npm ci` генерує типи `.wxt` через `wxt prepare`.
 
-Для crawler-інтеграції:
+- Chrome: `npm run dev`.
+- Firefox: `npm run dev:firefox`; за потреби задайте `WXT_FIREFOX_BINARY`.
+- Початкова сторінка: `WXT_START_URL`.
+- Логи: `VITE_LOG_LEVEL=debug|info|warn|error|silent`; у `src/` використовується лише `createLogger`.
+- `VITE_*` потрапляють у розширення. **Service-role та trigger secret мають залишатися тільки на сервері.**
+
+## Помилка «Не вдалося завантажити історію»
+
+Цей стан відрізняється від успішної відповіді без записів. Віджет зберігає поточну розпізнану ціну, не робить висновку про її чесність і пропонує повторити запит.
+
+1. Запустіть `npm run doctor`: перевіряються формат конфігурації, DNS та API без запису до БД.
+2. `ENOTFOUND` означає, що налаштоване ім’я backend не резолвиться. Звірте URL і стан проєкту в Supabase Dashboard; потім перебудуйте та перезавантажте розширення.
+3. Запустіть `npm run doctor:schema`: перевіряються `price_observations` і параметри `record_price`.
+4. `SCHEMA_MISMATCH` вимагає актуальних міграцій; `ACCESS_DENIED` — перевірки ключа та прав. Обидва випадки не повторюються автоматично.
+5. Для мережевої помилки читання виконуються максимум дві повторні спроби. Точний код і повідомлення є в background/content логах зі спільним `traceId`.
+
+`window.clarity` / `gtm.js` та повідомлення Tracking Prevention належать сайту або браузеру; вони самі по собі не встановлюють причину відмови Fair Price.
+
+Для перевірки коду без мережевого probe: `npm run doctor:offline`. Цей режим не підтверджує доступність чи схему виробничого backend.
+
+## Архітектура та одиниці
+
+- `src/entrypoints/dniprom.content.tsx`, `rozetka.content.tsx` запускають адаптери та контролер.
+- `src/adapters/*` парсять товар; адаптери повертають **цілі копійки**.
+- `src/core/ExtensionController.ts` керує SPA-навігацією, запитами та віджетом. Застарілі асинхронні результати відкидаються.
+- `src/entrypoints/background.ts` — єдиний runtime-шар доступу до Supabase; ціни тут переводяться в **гривні**.
+- `src/ui/injector.tsx` керує Shadow DOM, React root та очищенням при навігації.
+- Node crawler — основний збирач: каталог Dnipro-M, до 1000 останніх повідомлених URL за добу та відомі товари Rozetka; Edge Function — автентифікований резервний обхід до 20 товарів за запит.
+- Чистий парсер Node/Edge: `supabase/functions/_shared/crawler.ts`. Тести імпортують виробничу реалізацію.
+
+Браузерні звіти зберігаються як **неперевірені** в `community_price_reports` і не змінюють підтверджені ціни. Лише server/service-role збір наповнює щоденні `price_observations`; саме вони використовуються для оцінки. `price_history` зберігає зміни ціни/акції/наявності та час останнього підтвердження.
+
+Медіана використовує підтверджені UTC-дні за 60 днів, мінімум — спостереження за 30 днів. Для повної оцінки потрібно щонайменше три різні підтверджені дні та свіже спостереження у 30-денному вікні. Одна давня точка не доводить стабільність ціни.
+
+## Міграції та порядок оновлення
+
+Застосовуйте всі міграції послідовно, перевіривши їх на тестовому проєкті:
+
+1. `supabase/migrations/20260410_init.sql` — початкова схема.
+2. `supabase/migrations/20260420_v2.sql` — поля V2.
+3. `supabase/migrations/20261016_runtime_hardening.sql` — ізоляція звітів, щоденні підтвердження, права й crawler lease.
+
+Спочатку оновіть БД, потім crawler/Edge і розширення. Нова міграція виконується транзакційно. Старі записи зберігаються для аудиту; вони не перетворюються автоматично на довірені щоденні підтвердження. Після переходу нове підтверджене вікно накопичує crawler.
+
+Сповіщення та приймання телеметрії відкладено: runtime повертає `FEATURE_DISABLED`, приватні таблиці закриті для клієнтів. Партнерські налаштування вимкнені за замовчуванням. Google Fonts не завантажується; використовуються системні шрифти. Деталі — [privacy policy](docs/privacy-policy.md).
+
+## Перевірки
 
 ```powershell
-npm run verify:agent:crawl
+npm run ci:check          # TypeScript + unit/SQL tests + logging policy
+npm run test:e2e          # Збірка для тестів + локальний HTTP mock + Playwright
+npm run verify:full       # Перевірки + Chrome/Firefox build і ZIP
+npm audit
 ```
 
-### Дебаг
+SQL-тести запускають справжні міграції в PGlite з ізольованими Supabase-ролями. Вони не замінюють `doctor:schema` на розгорнутому проєкті. Необов’язкове `uuid-ossp` пропускається лише в embedded-тестах; схема використовує вбудований `gen_random_uuid`.
 
-- Dev для Chrome: `npm run dev`
-- Dev для Firefox: `npm run dev:firefox`
-- Для VS Code/JetBrains Gateway додані запускні конфіги в `.vscode/launch.json` і задачі в `.vscode/tasks.json`.
-- Логи уніфіковані форматом: `[FairPrice][<scope>][<LEVEL>] message {context}`.
-- Для Supabase дивіться `code` у логу (`SUPABASE_CONFIG_ERROR`, `SUPABASE_SAVE_FAILED`, `SUPABASE_HISTORY_FAILED`) і стартовий probe в background.
+E2E використовують тільки `.output-e2e` і mock `127.0.0.1:38765`. Виробничий Supabase не викликається. Тести перевіряють помилки, повторне завантаження, порожню історію, відновлення mount і SPA-перегони.
 
-#### Тестовий режим графіка (кількість записів)
+`npm run verify:agent` включає online `doctor`. `npm run verify:agent:crawl` включає реальний crawler smoke і потребує серверних credentials; він записує дані. Офлайн-тести crawler входять до `npm run test`.
 
-На сторінці товару можна увімкнути мок-режим без зміни коду, просто через query-параметри URL:
-
-- `fp_test=1` - увімкнути режим
-- `fp_records=<0..30>` - скільки записів показати
-- `fp_scenario=flat|discount|spike|volatile|rising` - форма історії
-- `fp_price=<ціна>` - зафіксувати поточну ціну в UAH (опційно)
-
-Приклад:
-
-```text
-https://dnipro-m.ua/tovar/akumulyatorna-lancyugova-pila-dms-201bc/?fp_test=1&fp_records=2&fp_scenario=flat&fp_price=1599
-```
-
-Швидкі кейси:
-
-- `fp_records=1` -> картка "Є перша підтверджена ціна"
-- `fp_records=2` -> попередній аналіз (2/3)
-- `fp_records=3` і більше -> повний аналіз з індексом чесності
-- при `fp_test=1` у картці видно бейдж `TEST MODE`, щоб не сплутати з реальними даними
-
-Щоб повернутись до реальних даних, приберіть `fp_test=1` з URL.
-
-### Тестування
-
-- Unit-тести (Vitest):
-  ```powershell
-  npm run test
-  ```
-- Повна перевірка локально (як перед PR):
-  ```powershell
-  npm run verify
-  ```
-- Перевірка, що в коді немає `console.*` поза `src/utils/logger.ts`:
-  ```powershell
-  npm run check:logs
-  ```
-- Watch-режим unit-тестів:
-  ```powershell
-  npm run test:watch
-  ```
-- E2E (Playwright):
-  ```powershell
-  npm run test:e2e:install
-  npm run test:e2e
-  npm run test:e2e:smoke
-  ```
-
-### CI / деплой артефактів
-
-- Workflow: `.github/workflows/ci.yml`
-- Canonical release workflow: `.github/workflows/release.yml` (запуск по тегу `v*`)
-- Daily crawl workflow: `.github/workflows/crawl.yml`
-- Manual AI self-check workflow: `.github/workflows/agent-self-check.yml`
-- Legacy manual build-only workflow: `.github/workflows/build-release.yml`
-- CI запускає:
-  - `npm run ci:check` (typecheck + unit tests)
-  - `npm run test:e2e:smoke:ci` (real extension smoke for Dnipro-M / Rozetka after build)
-  - `npm run ci:build` (build + zip для Chrome/Firefox)
-- Після виконання workflow артефакти доступні як `extension-output`.
-- `release.yml` публікує `.output/**/*.zip` у GitHub Release.
-
-5.  **Збірка для публікації**:
-    ```powershell
-    npm run build
-    ```
-    Готове розширення (zip-архів та розпакована папка) з'явиться у директорії `.output/`.
-
-### Встановлення в браузер (вручну)
-
-Якщо ви хочете встановити зібрану версію:
-1. Виконайте `npm run build`.
-2. Відкрийте `chrome://extensions/`.
-3. Увімкніть "Developer mode" (Режим розробника).
-4. Натисніть "Load unpacked" (Завантажити розпаковане).
-5. Виберіть папку `.output/chrome-mv3` (або відповідну для вашого браузера).
-
-### Серверний краулер цін
-
-Автоматично обходить весь каталог Dnipro-M (2500+ товарів) і заповнює базу
-даними без участі юзера.
-
-- Edge Function: `supabase/functions/crawl-prices/index.ts`
-- Детальна інструкція: [`docs/crawl-prices.md`](docs/crawl-prices.md)
-- SQL-схема бази: `supabase/migrations/20260410_init.sql`
-- Cron workflow: `.github/workflows/crawl.yml`
-
-Швидкий старт:
+## Збірка та встановлення
 
 ```powershell
-# 1. Деплой функції
-npx supabase functions deploy crawl-prices
-
-# 2. Встановити Service Role Key (беретcя з Supabase Dashboard → Settings → API)
-npx supabase secrets set SUPABASE_SERVICE_ROLE_KEY=<key>
-
-# 3. Тестовий запуск
-npx supabase functions invoke crawl-prices --body '{}'
+npm run build
+npm run build:firefox
+npm run zip
+npm run zip:firefox
 ```
 
-## Додавання нових магазинів
+`build` створює розпаковане розширення; ZIP створюється командами `zip`. Для Chrome відкрийте `chrome://extensions`, увімкніть Developer mode і завантажте `.output/chrome-mv3`. Firefox-збірка міститься в `.output/firefox-mv2`.
 
-Щоб додати підтримку нового магазину:
-1.  Створіть новий клас адаптера в `src/core/adapters/`, наслідуючись від `IPriceAdapter`.
-2.  Додайте його в масив `adapters` у файлі `src/entrypoints/content.js`.
+## Crawler та автоматизація
+
+Інструкція: [docs/crawl-prices.md](docs/crawl-prices.md). GitHub Actions:
+
+- `ci.yml` / `release.yml`: перевірки, ізольовані E2E та артефакти Chrome/Firefox; canonical release — тег `v*`.
+- `crawl.yml`: щоденний Node crawl; потрібні variable `SUPABASE_URL` та secret `SUPABASE_SERVICE_ROLE_KEY`.
+- `deploy-crawler.yml`: резервна Edge Function; потрібні також Supabase deployment secrets і `CRAWL_TRIGGER_SECRET`.
+- `agent-self-check.yml`: офлайн-перевірка коду, опційний справжній crawler smoke.
+
+## Додавання магазину
+
+Створіть адаптер у `src/adapters/` за `IPriceAdapter`, content entrypoint у `src/entrypoints/`, додайте дозволені URL у конфігурацію, runtime- та SQL-валідацію і тести. Не змінюйте контракт копійки/гривні.
+
+Тестовий режим графіка: `?fp_test=1&fp_records=3&fp_scenario=flat&fp_price=1999`. У цьому режимі показується `TEST MODE`, дані не надсилаються в backend.
 
 ## Ліцензія
 

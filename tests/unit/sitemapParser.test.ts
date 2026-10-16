@@ -28,8 +28,8 @@ describe('sitemapParser', () => {
   it('extracts all entries from XML', () => {
     const entries = extractEntries(SAMPLE_XML);
     expect(entries).toHaveLength(4);
-    expect(entries[0].loc).toBe('https://dnipro-m.ua/');
-    expect(entries[0].lastmod).toBe('2026-04-10T01:00:01+03:00');
+    expect(entries[0]!.loc).toBe('https://dnipro-m.ua/');
+    expect(entries[0]!.lastmod).toBe('2026-04-10T01:00:01+03:00');
   });
 
   it('filters product URLs with isDniproMProduct', () => {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import '@/utils/i18n';
 import type { HonestyResult, PriceTrend, HonestyVerdict } from '@/types/honesty';
+import type { HistoryView } from '@/types/runtime';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
@@ -18,6 +19,7 @@ interface PriceChartProps {
   data: PriceHistory[];
   honesty: HonestyResult;
   store?: string;
+  view?: HistoryView;
 }
 
 const DEFAULT_CHART_LOCALE = 'uk-UA';
@@ -269,18 +271,13 @@ const PreviewCollectingCard = ({
 };
 
 const SinglePriceCard = ({
-  message, observedPrice, firstSeenAt, daysAtObservedPrice,
+  message, observedPrice, firstSeenAt,
 }: {
   message: string; observedPrice?: number; firstSeenAt?: number; daysAtObservedPrice?: number;
 }) => {
   const { t } = useTranslation();
 
-  const daysLabel = (() => {
-    const d = daysAtObservedPrice ?? 0;
-    if (d <= 0) return t('chart.singlePrice.lessThanDay');
-    if (d === 1) return t('chart.singlePrice.day');
-    return t('chart.singlePrice.days', { count: d });
-  })();
+  const daysLabel = t('chart.singlePrice.oneObservation');
 
   const dateLabel = (() => {
     if (!firstSeenAt || !Number.isFinite(firstSeenAt)) return t('chart.singlePrice.datePending');
@@ -343,7 +340,7 @@ const TestModeBadge = () => (
   </div>
 );
 
-export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
+export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(0);
@@ -356,6 +353,7 @@ export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
   const withTestBadge = (content: React.ReactNode) => (
     <div className="relative">
       {isTestMode && <TestModeBadge />}
+      {view?.saveFailed && <p role="status" className="text-xs text-amber-300 p-2">{t('chart.history.saveWarning')}</p>}
       {content}
     </div>
   );
@@ -373,7 +371,21 @@ export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
     });
     observer.observe(containerRef.current);
     return () => observer.disconnect();
-  }, []);
+  }, [view?.state, honesty.state]);
+
+  if (view && view.state !== 'ready') {
+    return themed(withTestBadge(
+      <div className="p-4 rounded-2xl bg-slate-900 text-slate-200 text-sm" data-history-state={view.state}>
+        <p role={view.state === 'error' ? 'alert' : 'status'}>{t(`chart.history.${view.state}`)}</p>
+        {view.currentPrice != null && <p className="mt-2">{t('chart.history.currentPrice')}: {view.currentPrice.toLocaleString('uk-UA')} ₴</p>}
+        {view.state === 'error' && <>
+          <p className="mt-2 text-xs text-slate-400">{t(`chart.history.${view.error?.code === 'SCHEMA_MISMATCH' ? 'schemaHint'
+            : view.error?.code === 'ACCESS_DENIED' ? 'accessHint' : 'networkHint'}`)}</p>
+          <button className="mt-3 px-3 py-2 rounded-lg bg-cyan-500 text-slate-900" onClick={view.onRetry}>{t('chart.history.retry')}</button>
+        </>}
+      </div>
+    ));
+  }
 
   if (!data || data.length === 0) {
     return themed(withTestBadge(<div className="p-4 rounded-2xl bg-slate-900/90 text-slate-400 text-xs text-center">{t('chart.notEnoughData')}</div>));
@@ -385,7 +397,7 @@ export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
       .sort((a, b) => a.timestamp - b.timestamp);
 
   if (honesty.state === 'single-price' && normalizedData.length >= 1) {
-    const observedPoint = normalizedData[0];
+    const observedPoint = normalizedData[0]!;
     return themed(withTestBadge(
         <SinglePriceCard
             message={translatedMessage}
@@ -402,7 +414,7 @@ export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
             count={normalizedData.length}
             message={translatedMessage}
             observedPrices={honesty.details?.observedPrices}
-            currentPrice={normalizedData[normalizedData.length - 1]?.price}
+            currentPrice={view?.currentPrice ?? normalizedData[normalizedData.length - 1]?.price}
         />
     ));
   }
@@ -415,7 +427,7 @@ export const PriceChart = ({ data, honesty, store }: PriceChartProps) => {
     const dateObj = new Date(item.date);
     if (isNaN(dateObj.getTime())) return acc;
     const dateStr = dateObj.toLocaleDateString(DEFAULT_CHART_LOCALE, { day: '2-digit', month: 'short' });
-    acc[dateStr] = {
+    acc[dateObj.toISOString().slice(0, 10)] = {
       dateStr,
       price: Math.round(item.price),
       oldPrice: item.oldPrice ? Math.round(item.oldPrice) : null,

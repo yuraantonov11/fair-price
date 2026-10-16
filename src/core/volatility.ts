@@ -40,6 +40,6 @@ const UA_CATEGORY_MAP: Record<string, string> = {
 export function getCategoryVolatility(category: string = 'unknown'): CategoryVolatility {
   const normalised = category.toLowerCase().trim();
   const canonical = UA_CATEGORY_MAP[normalised] ?? (VOLATILITY_MAP[normalised] ? normalised : 'unknown');
-  return VOLATILITY_MAP[canonical] ?? VOLATILITY_MAP['unknown'];
+  return VOLATILITY_MAP[canonical] ?? VOLATILITY_MAP['unknown']!;
 }
 

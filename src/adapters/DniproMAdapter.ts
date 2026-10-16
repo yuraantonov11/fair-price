@@ -1,4 +1,4 @@
-import { IPriceAdapter, ProductData } from './IPriceAdapter';
+import type { IPriceAdapter, ProductData } from './IPriceAdapter';
 import { parsePrice, queryFirst, waitForAnyElement } from '@/utils/domUtils';
 import { HydrationParser } from '@/utils/hydrationParser';
 import { createLogger } from '@/utils/logger';
@@ -54,7 +54,7 @@ export class DniproMAdapter implements IPriceAdapter {
       '[data-price-current]',
       '[itemprop="price"]',
     ]);
-    return parsePrice(priceEl?.textContent);
+    return parsePrice(priceEl?.getAttribute('content') ?? priceEl?.textContent);
   }
 
   getOriginalPrice(): number | null {

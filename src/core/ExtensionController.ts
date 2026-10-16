@@ -1,270 +1,178 @@
-import { IPriceAdapter } from '@/adapters/IPriceAdapter';
-import { HonestyCalculator, HonestyResult } from './HonestyCalculator';
-import { MessageRouter } from "@/core/MessageRouter";
+import type { IPriceAdapter } from '@/adapters/IPriceAdapter';
+import { HonestyCalculator, type HonestyResult } from './HonestyCalculator';
+import { MessageRouter } from '@/core/MessageRouter';
 import { createLogger } from '@/utils/logger';
+import { runtimeFailure } from '@/utils/runtimeErrors';
 import { resolveChartTestMode } from '@/core/chartTestMode';
 import { isMountMissing, isMountOutOfPlace, placeMountNearAnchor } from '@/core/spaReinjectHelper';
+import type { HistoryPoint, HistoryView, RuntimeResponse } from '@/types/runtime';
+import type { ExtensionMessage } from '@/types/messages';
 
 export class ExtensionController {
-    private adapter: IPriceAdapter;
-    private currentUrl: string;
+    private currentUrl = window.location.href;
     private mountPoint: HTMLElement | null = null;
     private observer: MutationObserver | null = null;
     private processTimer: number | null = null;
     private restoreTimer: number | null = null;
-
-    // Кеш для відновлення після агресивних перемалювань (Angular/React)
-    private cachedHistory: any[] | null = null;
-    private cachedHonestyScore: HonestyResult | null = null;
-    private isProcessing = false;
+    private generation = 0;
+    private processing = false;
+    private cached: { history: HistoryPoint[]; honesty: HonestyResult; view: HistoryView } | null = null;
+    private traceId = crypto.randomUUID();
     private logger;
 
     constructor(
-        adapter: IPriceAdapter,
-        private renderUI: (container: HTMLElement, history: any[], honestyScore: HonestyResult) => void
+        private adapter: IPriceAdapter,
+        private renderUI: (container: HTMLElement, history: HistoryPoint[], honesty: HonestyResult, view: HistoryView) => void | Promise<void>,
+        private disposeUI: () => void = () => {},
     ) {
-        this.adapter = adapter;
-        this.currentUrl = window.location.href;
-        const traceId = Math.random().toString(36).slice(2, 10);
-        this.logger = createLogger('ExtensionController', {
-            runtime: 'content',
-            store: this.adapter.getStoreDomain(),
-            traceId,
-        });
+        this.logger = createLogger('ExtensionController', { runtime: 'content', store: adapter.getStoreDomain(), traceId: this.traceId });
     }
 
     public init() {
-        this.logger.info('Controller initialized', { url: this.currentUrl });
         void this.processPage();
-
-        // Надійний обсервер для SPA-додатків
         this.observer = new MutationObserver(() => {
-            const url = location.href;
-            if (url !== this.currentUrl) {
-                // Сценарій 1: Користувач перейшов на іншу сторінку
-                this.currentUrl = url;
-                this.logger.info('Detected SPA navigation, restarting page processing', { url });
+            if (location.href !== this.currentUrl) {
+                this.currentUrl = location.href;
+                ++this.generation; // Invalidate old work immediately, before the navigation debounce.
                 this.cleanup();
-                this.scheduleProcessPage(500);
-            } else if (this.adapter.isProductPage() && this.cachedHistory && this.cachedHonestyScore && !this.isProcessing) {
+                this.scheduleProcessPage();
+            } else if (this.cached && !this.processing) {
                 const anchor = this.adapter.getUIAnchor();
                 if (anchor && (isMountMissing(this.mountPoint) || isMountOutOfPlace(this.mountPoint, anchor, this.adapter.getUIInsertMethod()))) {
-                    this.scheduleRestoreFromCache();
+                    if (this.restoreTimer !== null) return;
+                    this.restoreTimer = window.setTimeout(() => {
+                        this.restoreTimer = null;
+                        if (this.cached) void this.injectUI();
+                    }, 150);
                 }
             }
         });
-
         this.observer.observe(document, { subtree: true, childList: true });
     }
 
-    private cleanup() {
-        if (this.processTimer) {
-            window.clearTimeout(this.processTimer);
-            this.processTimer = null;
-        }
-        if (this.restoreTimer) {
-            window.clearTimeout(this.restoreTimer);
-            this.restoreTimer = null;
-        }
-        if (this.mountPoint) {
-            this.mountPoint.remove();
-            this.mountPoint = null;
-        }
-        this.cachedHistory = null;
-        this.cachedHonestyScore = null;
+    public destroy() {
+        ++this.generation;
+        this.observer?.disconnect();
+        this.observer = null;
+        this.cleanup();
     }
 
-    private scheduleProcessPage(delay = 250) {
-        if (this.processTimer) {
-            window.clearTimeout(this.processTimer);
-        }
+    private cleanup() {
+        if (this.processTimer !== null) window.clearTimeout(this.processTimer);
+        if (this.restoreTimer !== null) window.clearTimeout(this.restoreTimer);
+        this.processTimer = this.restoreTimer = null;
+        this.disposeUI();
+        this.mountPoint?.remove();
+        this.mountPoint = null;
+        this.cached = null;
+        this.processing = false;
+    }
+
+    private scheduleProcessPage() {
+        if (this.processTimer !== null) window.clearTimeout(this.processTimer);
         this.processTimer = window.setTimeout(() => {
             this.processTimer = null;
             void this.processPage();
-        }, delay);
+        }, 250);
     }
 
-    private scheduleRestoreFromCache() {
-        if (this.restoreTimer) return;
-        this.restoreTimer = window.setTimeout(() => {
-            this.restoreTimer = null;
-            if (!this.cachedHistory || !this.cachedHonestyScore) return;
-            const anchor = this.adapter.getUIAnchor();
-            if (!anchor) return;
-            this.logger.info('UI mount missing or displaced, restoring from cache', { url: this.currentUrl });
-            if (isMountMissing(this.mountPoint)) {
-                this.mountPoint = null;
-            }
-            void this.injectUI(this.cachedHistory, this.cachedHonestyScore);
-        }, 150);
+    private send<T = unknown>(message: ExtensionMessage) {
+        return MessageRouter.send<T>({ ...message, traceId: this.traceId });
     }
 
     private async processPage() {
-        if (this.isProcessing) return;
-        this.isProcessing = true;
-
-        if (!this.adapter.isProductPage()) {
-            MessageRouter.send({ type: 'SET_ICON', payload: { status: 'inactive' } }).catch(() => {});
-            this.isProcessing = false;
-            return;
-        }
-
+        const run = ++this.generation;
+        const url = this.currentUrl;
+        const active = () => run === this.generation && location.href === url;
+        this.processing = true;
+        let currentPrice: number | undefined;
+        const show = async (history: HistoryPoint[], view: HistoryView, testMode = false) => {
+            if (!active()) return;
+            const honesty = HonestyCalculator.calculate(currentPrice ?? 0,
+                history.map(p => ({ ...p, date: new Date(p.date).getTime() })), this.category);
+            if (testMode) honesty.details = { entryCount: history.length, ...honesty.details, isTestMode: true };
+            if (view.state === 'loading' || view.state === 'error') {
+                honesty.score = -1;
+                honesty.state = 'collecting';
+                honesty.verdict = undefined;
+            }
+            this.cached = { history, honesty, view: { ...view, currentPrice, onRetry: () => { void this.processPage(); } } };
+            const status = view.state !== 'ready' ? 'inactive' : honesty.state === 'single-price' ? 'single-price'
+                : honesty.state !== 'analyzed' ? 'inactive' : honesty.score < 40 ? 'error' : 'success';
+            void this.send({ type: 'SET_ICON', payload: { status } });
+            await this.injectUI();
+        };
         try {
-            const productData = await this.adapter.parseProductPage();
-            if (!productData) {
-                this.isProcessing = false;
+            if (!this.adapter.isProductPage()) {
+                void this.send({ type: 'SET_ICON', payload: { status: 'inactive' } });
                 return;
             }
-
-            const saveResponse = await MessageRouter.send({ type: 'SAVE_PRODUCT', payload: productData });
-            if (!saveResponse?.success) {
-                this.logger.warn('SAVE_PRODUCT failed, continue with local analysis', {
-                    error: saveResponse?.error || 'unknown error',
-                    code: saveResponse?.code || 'UNKNOWN',
-                    productUrl: productData.url,
-                    externalId: productData.externalId,
-                });
+            const product = await this.adapter.parseProductPage();
+            if (!active() || !product) return;
+            currentPrice = product.price / 100;
+            this.category = product.category;
+            const test = resolveChartTestMode(url, currentPrice);
+            if (test.enabled) {
+                currentPrice = test.currentPrice ?? currentPrice;
+                const history: HistoryPoint[] = (test.history ?? []).map(p => ({ ...p, source: 'system' }));
+                await show(history, { state: history.length ? 'ready' : 'empty' }, true);
+                return;
             }
-
-            const historyResponse = await MessageRouter.send({
-                type: 'GET_HISTORY',
-                payload: { url: productData.url }
-            });
-
-            if (!historyResponse?.success) {
-                this.logger.warn('GET_HISTORY failed, fallback to empty history', {
-                    error: historyResponse?.error || 'unknown error',
-                    code: historyResponse?.code || 'UNKNOWN',
-                    productUrl: productData.url,
-                });
-            }
-
-            const historyData = Array.isArray(historyResponse?.data) ? historyResponse.data : [];
-
-            const baselineResponse = await MessageRouter.send({
-                type: 'CHECK_BASELINE',
-                payload: {
-                    url: productData.url,
-                    store: this.adapter.getStoreDomain(),
-                    externalId: productData.externalId,
-                    currentPrice: productData.price / 100,
-                },
-            });
-
-            if (baselineResponse?.success && baselineResponse?.data) {
-                MessageRouter.send({
-                    type: 'TRACK_EVENT',
-                    payload: {
-                        event: 'personalized_pricing_check',
-                        data: {
-                            store: this.adapter.getStoreDomain(),
-                            url: productData.url,
-                            currentPrice: baselineResponse.data.currentPrice,
-                            baselinePrice: baselineResponse.data.baselinePrice,
-                            deltaPct: baselineResponse.data.deltaPct,
-                            isSuspicious: baselineResponse.data.isSuspicious,
-                        },
-                    },
-                }).catch(() => {});
-            }
-
-            // KPI: track history_loaded
-            if (historyResponse?.success && historyData.length > 0) {
-                MessageRouter.send({
-                    type: 'TRACK_EVENT',
-                    payload: { event: 'history_loaded', data: { store: this.adapter.getStoreDomain(), count: historyData.length } },
-                }).catch(() => {});
-            }
-            let mappedHistory = historyData.map((item: any) => ({
-                price: item.price,
-                oldPrice: item.oldPrice,
-                promoName: item.promoName,
-                date: new Date(item.date).getTime()
-            }));
-
-            const liveCurrentPrice = productData.price / 100;
-            const chartTestMode = resolveChartTestMode(window.location.href, liveCurrentPrice);
-            if (chartTestMode.enabled) {
-                mappedHistory = chartTestMode.history ?? mappedHistory;
-                if (chartTestMode.currentPrice != null) {
-                    productData.price = Math.round(chartTestMode.currentPrice * 100);
+            await show([], { state: 'loading' });
+            if (!active()) return;
+            let saveFailed = false;
+            void this.send({ type: 'SAVE_PRODUCT', payload: product }).then(result => {
+                if (!active()) return;
+                saveFailed = !result.success;
+                if (!result.success) this.logger.warn('SAVE_PRODUCT failed', { ...result, url: product.url });
+                if (this.cached && this.cached.view.state !== 'loading' && saveFailed) {
+                    this.cached.view.saveFailed = true;
+                    void this.injectUI();
                 }
-                this.logger.info('Chart test mode enabled', {
-                    source: chartTestMode.source,
-                    records: chartTestMode.recordCount,
-                    scenario: chartTestMode.scenario,
-                    url: this.currentUrl,
-                });
+            });
+            let response: RuntimeResponse<HistoryPoint[]>;
+            for (let attempt = 0; ; attempt++) {
+                response = await this.send<HistoryPoint[]>({ type: 'GET_HISTORY', payload: { url: product.url } });
+                if (!active()) return;
+                if (response.success || !response.retryable || attempt >= 2) break;
+                await new Promise(resolve => window.setTimeout(resolve, attempt === 0 ? 500 : 1500));
+                if (!active()) return;
             }
-
-            const honestyResult = HonestyCalculator.calculate(
-                productData.price / 100,
-                mappedHistory,
-                productData.category
-            );
-
-            if (chartTestMode.enabled) {
-                honestyResult.details = {
-                    entryCount: mappedHistory.length,
-                    ...(honestyResult.details ?? {}),
-                    isTestMode: true,
-                };
+            if (response.success) {
+                const history = response.data ?? [];
+                await show(history, { state: history.length ? 'ready' : 'empty', saveFailed });
+            } else {
+                this.logger.warn('GET_HISTORY failed', { ...response, url: product.url });
+                await show([], { state: 'error', error: response, saveFailed });
             }
-
-            const iconStatus = honestyResult.state === 'single-price'
-                ? 'single-price'
-                : honestyResult.state !== 'analyzed'
-                    ? 'inactive'
-                    : (honestyResult.score < 40 ? 'error' : 'success');
-            MessageRouter.send({ type: 'SET_ICON', payload: { status: iconStatus } }).catch(() => {});
-
-            // Зберігаємо в кеш для моментального відновлення
-            this.cachedHistory = mappedHistory;
-            this.cachedHonestyScore = honestyResult;
-
-            await this.injectUI(mappedHistory, honestyResult);
-
-            // KPI: track widget_shown
-            MessageRouter.send({
-                type: 'TRACK_EVENT',
-                payload: {
-                    event: 'widget_shown',
-                    data: {
-                        store: this.adapter.getStoreDomain(),
-                        state: honestyResult.state,
-                        verdict: honestyResult.verdict,
-                        score: honestyResult.score,
-                    },
-                },
-            }).catch(() => {});
-
+            if (active()) {
+                // Optional check has its own timeout and never holds up the widget.
+                void this.send({ type: 'CHECK_BASELINE', payload: {
+                    url: product.url, store: this.adapter.getStoreDomain(), externalId: product.externalId, currentPrice,
+                } });
+            }
         } catch (error) {
-            this.logger.error('Page processing failed', { error, url: this.currentUrl });
+            if (active()) await show([], { state: 'error', error: runtimeFailure(error) });
         } finally {
-            this.isProcessing = false;
+            if (active()) this.processing = false;
         }
     }
 
-    private async injectUI(history: any[], honestyScore: HonestyResult) {
+    private category?: string;
+
+    private async injectUI() {
+        if (!this.cached) return;
         const anchor = this.adapter.getUIAnchor();
         if (!anchor) return;
-        const insertMethod = this.adapter.getUIInsertMethod();
-
-        // Перевіряємо, чи контейнер відсутній фізично в DOM
         if (isMountMissing(this.mountPoint)) {
             this.mountPoint = document.createElement('div');
             this.mountPoint.id = 'fair-price-container';
-            // Додані відступи (my-4) та очищення обтікання, щоб макет магазину не "наїжджав" на графік
-            this.mountPoint.className = 'w-full my-4 z-[999] block clear-both';
+            this.mountPoint.style.cssText = 'width:100%;display:block;margin:16px 0;clear:both';
         }
-
-        const mountPoint = this.mountPoint;
-        if (!mountPoint) return;
-
-        if (isMountOutOfPlace(mountPoint, anchor, insertMethod)) {
-            placeMountNearAnchor({ mountPoint, anchor, insertMethod });
-        }
-
-        this.renderUI(mountPoint, history, honestyScore);
+        const mount = this.mountPoint!;
+        const insertMethod = this.adapter.getUIInsertMethod();
+        if (isMountOutOfPlace(mount, anchor, insertMethod)) placeMountNearAnchor({ mountPoint: mount, anchor, insertMethod });
+        const { history, honesty, view } = this.cached;
+        await this.renderUI(mount, history, honesty, view);
     }
 }
