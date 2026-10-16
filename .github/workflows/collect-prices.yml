@@ -3,6 +3,7 @@ name: Collect Confirmed Prices
 on:
   schedule:
     - cron: '17 3 * * *'  # щодня о 03:17 UTC, поза піком на початку години
+    - cron: '*/5 * * * *' # Temporary bounded scheduler verification; remove after a schedule event succeeds.
   workflow_dispatch:        # ручний запуск через GitHub UI
     inputs:
       store:
@@ -51,8 +52,8 @@ jobs:
         env:
           SUPABASE_URL: ${{ vars.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          CRAWL_LIMIT: ${{ inputs.limit }}
-          CRAWL_STORE: ${{ inputs.store }}
+          CRAWL_LIMIT: ${{ github.event_name == 'schedule' && github.event.schedule == '*/5 * * * *' && '10' || inputs.limit }}
+          CRAWL_STORE: ${{ github.event_name == 'schedule' && github.event.schedule == '*/5 * * * *' && 'rozetka.com.ua' || inputs.store }}
         run: |
           if [ -z "$SUPABASE_URL" ]; then echo "Missing GitHub variable SUPABASE_URL"; exit 1; fi
           npm run doctor:crawl
