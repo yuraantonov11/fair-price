@@ -57,6 +57,16 @@ describe('production crawler', () => {
     expect(onError).toHaveBeenCalledWith(url, expect.objectContaining({ status: 403 }));
     expect(record).not.toHaveBeenCalled();
   });
+  it('skips retired Rozetka IDs without following redirects or trusting a different product', async () => {
+    const redirect = { url: 'https://rozetka.com.ua', status: 301 };
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ success: true, redirect_to: redirect }));
+    expect(await fetchProduct('https://rozetka.com.ua/ua/tool/p123/', fetcher)).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    redirect.url = 'https://evil.test/';
+    await expect(fetchProduct('https://rozetka.com.ua/ua/tool/p123/', fetcher)).rejects.toThrow('Invalid Rozetka');
+    redirect.url = 'https://rozetka.com.ua/ua/other/p456/';
+    await expect(fetchProduct('https://rozetka.com.ua/ua/tool/p123/', fetcher)).rejects.toThrow('Invalid Rozetka');
+  });
   it.each([{ concurrency: 0 }, { concurrency: 21 }, { limit: -1 }, { delay: 'x' }, { limit: true }])('rejects unsafe options %j', options => {
     expect(() => crawlOptions(options)).toThrow();
   });

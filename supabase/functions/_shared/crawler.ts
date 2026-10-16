@@ -107,6 +107,13 @@ export async function fetchProduct(inputUrl: string, fetcher: typeof fetch = fet
     api.search = new URLSearchParams({ goodsId: id, lang: 'ua', country: 'UA' }).toString();
     const response = JSON.parse(await fetchText(api.href, fetcher));
     const product = response?.data;
+    // Retired IDs can return HTTP 200 with a permanent redirect to a store
+    // category/home page instead of product data. Do not treat that as a price.
+    const redirect = response?.redirect_to;
+    if (!product && response?.success === true && [301, 308].includes(redirect?.status)) {
+      const target = new URL(redirect.url);
+      if (target.protocol === 'https:' && target.hostname === 'rozetka.com.ua' && !isProductUrl(target.href)) return null;
+    }
     if (response?.success !== true || String(product?.id) !== id
       || typeof product?.title !== 'string' || !product.title.trim()
       || typeof product.sell_status !== 'string') throw new Error('Invalid Rozetka product response');
