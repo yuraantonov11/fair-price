@@ -23,6 +23,8 @@ node scripts/crawl.mjs --concurrency 10 --delay 2000 --offset 0
 
 Малий smoke теж записує підтверджені дані. Для перевірки без серверних credentials використовуйте `npm run test`.
 
+Після першого застосування міграції щоденних спостережень запустіть повний Node workflow без `limit`. Smoke на 10 URL заповнює лише невелику частину каталогу. Для перевірки покриття читайте кількість рядків у `price_observations`, а не кількість старих `products` чи `price_history`. На сторінках без нового підтвердження віджет показує порожню історію.
+
 ## Надійність
 
 - Усі ціни — додатні цілі копійки; парсер приймає структуровані Next.js/JSON-LD дані та валюту UAH.
@@ -57,6 +59,7 @@ Invoke-RestMethod -Method Post -Uri "$env:SUPABASE_URL/functions/v1/crawl-prices
 - Secret: `SUPABASE_SERVICE_ROLE_KEY`.
 - Для Edge deployment: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `CRAWL_TRIGGER_SECRET`.
 - Daily workflow має власну concurrency group; база додатково захищає між Node та Edge.
+- Розклад — щодня о 03:17 UTC. У публічних GitHub-репозиторіях scheduled workflows можуть вимикатися після 60 днів без активності репозиторію; перевіряйте дату останнього запуску, а не лише стан `active`.
 - Deploy workflow перевіряє відмову без/з неправильним секретом і робить автентифікований crawl до 10 справжніх товарів.
 
 Ручний Agent Self Check також має `backend_action`: `inspect` показує стан і схему поточного проєкту; `restore` відновлює призупинений проєкт без відкату backup; `migration-plan` показує відсутні міграції; `migrate` застосовує їх через CLI. Maintenance обмежено наявним проєктом, не створює нової БД і не виводить credentials.

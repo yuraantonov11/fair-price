@@ -2,7 +2,7 @@ name: Crawl Prices
 
 on:
   schedule:
-    - cron: '0 3 * * *'   # щодня о 03:00 UTC (05:00 Київ)
+    - cron: '17 3 * * *'  # щодня о 03:17 UTC, поза піком на початку години
   workflow_dispatch:        # ручний запуск через GitHub UI
     inputs:
       limit:
@@ -10,14 +10,13 @@ on:
         required: false
         type: string
 
-concurrency:
-  group: daily-price-crawler
-  cancel-in-progress: false
-
 jobs:
   crawl:
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    concurrency:
+      group: confirmed-prices-node
+      cancel-in-progress: false
 
     steps:
       - name: Checkout
