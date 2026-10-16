@@ -29,11 +29,15 @@ export default defineConfig({
       'src/**/.env*', 'public/**/.env*', 'scripts/**/.env*', 'supabase/**/.env*'],
   },
   modules: ['@wxt-dev/module-react'],
+  dev: {
+    server: { port: 3000, strictPort: true },
+  },
   vite: () => ({
     plugins: [tailwindcss()],
+    css: { devSourcemap: true, transformer: 'lightningcss' },
   }),
-  manifest: {
-    name: "Чесна Ціна",
+  manifest: ({ command }) => ({
+    name: command === 'serve' ? "Чесна Ціна (Dev)" : "Чесна Ціна",
     short_name: "FairPrice",
     version,
     description: "Автоматичний моніторинг цін та перевірка реальності знижок в українських інтернет-магазинах.",
@@ -73,7 +77,7 @@ export default defineConfig({
         } as Record<string, unknown>)
       }
     }
-  },
+  }),
   webExt: {
     startUrls: [devStartUrl],
     binaries: {

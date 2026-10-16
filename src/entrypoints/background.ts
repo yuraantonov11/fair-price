@@ -151,6 +151,12 @@ export async function handleMessage(message: TracedMessage, sender: Sender = {})
 }
 
 export default defineBackground(() => {
+  logger.info('Background started', {
+    version: browser.runtime.getManifest().version,
+    extensionId: browser.runtime.id,
+    command: import.meta.env.COMMAND,
+    browser: import.meta.env.BROWSER,
+  });
   browser.runtime.onMessage.addListener((input: unknown, sender, sendResponse) => {
     if (sender.id !== browser.runtime.id || !input || typeof input !== 'object' || !('type' in input)) return false;
     void handleMessage(input as TracedMessage, sender).then(sendResponse);
