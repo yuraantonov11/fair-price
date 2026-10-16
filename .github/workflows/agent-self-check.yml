@@ -42,6 +42,8 @@ jobs:
       - name: Setup Supabase CLI for migrations
         if: ${{ inputs.backend_action == 'migration-plan' || inputs.backend_action == 'migrate' }}
         uses: supabase/setup-cli@v1
+        with:
+          version: 2.121.0
       - name: Link existing project and show pending migrations
         if: ${{ inputs.backend_action == 'migration-plan' || inputs.backend_action == 'migrate' }}
         env:

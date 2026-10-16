@@ -20,6 +20,8 @@ jobs:
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
+        with:
+          version: 2.121.0
 
       - name: Link Supabase project
         run: supabase link --project-ref "$SUPABASE_PROJECT_REF"
