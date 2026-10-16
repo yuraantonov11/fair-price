@@ -80,7 +80,8 @@ export async function fetchText(url: string, fetcher: typeof fetch = fetch, time
         signal: AbortSignal.timeout(timeoutMs), redirect: 'error',
       });
       if (!response.ok) {
-        const error = new Error(`HTTP ${response.status}`) as Error & { retryable: boolean };
+        const error = new Error(`HTTP ${response.status}`) as Error & { retryable: boolean; status: number };
+        error.status = response.status;
         error.retryable = response.status === 429 || response.status >= 500;
         throw error;
       }
@@ -89,6 +90,35 @@ export async function fetchText(url: string, fetcher: typeof fetch = fetch, time
       if (attempt >= 2 || (error as { retryable?: boolean }).retryable === false) throw error;
       await new Promise(resolve => setTimeout(resolve, 250 * 2 ** attempt));
     }
+  }
+}
+
+export async function fetchProduct(inputUrl: string, fetcher: typeof fetch = fetch): Promise<ScrapedProduct | null> {
+  if (!isProductUrl(inputUrl)) throw new Error('Unsupported product URL');
+  const address = new URL(inputUrl);
+  try {
+    if (address.hostname !== 'rozetka.com.ua') {
+      return parseProductHtml(await fetchText(inputUrl, fetcher), inputUrl);
+    }
+    // The public UA product API remains available when store HTML requires a
+    // Cloudflare challenge. Verify the requested goods ID; never trust a report's price.
+    const id = address.pathname.match(/\/p(\d+)\/?$/)![1]!;
+    const api = new URL('https://product-api.rozetka.com.ua/v4/goods/get-main');
+    api.search = new URLSearchParams({ goodsId: id, lang: 'ua', country: 'UA' }).toString();
+    const response = JSON.parse(await fetchText(api.href, fetcher));
+    const product = response?.data;
+    if (response?.success !== true || String(product?.id) !== id
+      || typeof product?.title !== 'string' || !product.title.trim()
+      || typeof product.sell_status !== 'string') throw new Error('Invalid Rozetka product response');
+    const price = kopecks(product.price);
+    if (!price) return null;
+    return { url: address.origin + address.pathname.replace(/\/+$/, '') + '/', externalId: id,
+      name: product.title.trim().slice(0, 500), price, regularPrice: kopecks(product.old_price),
+      isAvailable: ['available', 'limited'].includes(product.sell_status) };
+  } catch (error) {
+    // Removed product pages should not make every daily run fail permanently.
+    if ([404, 410].includes((error as { status?: number }).status ?? 0)) return null;
+    throw error;
   }
 }
 
@@ -130,7 +160,7 @@ export async function crawlBatch(urls: string[], record: (product: ScrapedProduc
   for (let i = 0; i < selected.length; i += options.concurrency) {
     await Promise.all(selected.slice(i, i + options.concurrency).map(async url => {
       try {
-        const product = parseProductHtml(await fetchText(url, fetcher), url);
+        const product = await fetchProduct(url, fetcher);
         if (!product) { summary.skipped++; return; }
         await record(product);
         summary.saved++;

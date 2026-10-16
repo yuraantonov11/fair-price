@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { assertCrawlSuccess, crawlBatch, crawlOptions, extractProductUrls, fetchText, parseProductHtml } from '../../supabase/functions/_shared/crawler';
+import { assertCrawlSuccess, crawlBatch, crawlOptions, extractProductUrls, fetchProduct, fetchText, parseProductHtml } from '../../supabase/functions/_shared/crawler';
 
 const url = 'https://dnipro-m.ua/tovar/test/';
 const html = '<script type="application/json" id="__NEXT_DATA__">{"props":{"pageProps":{"product":{"id":1,"title":"Drill","price":"1999.99","oldPrice":"2500","isAvailable":true}}}}</script>';
@@ -22,6 +22,38 @@ describe('production crawler', () => {
     const page = '<script type="application/ld+json">{"@type":"Product","name":"Tool","sku":"123","offers":{"price":"2999.50","priceCurrency":"UAH"}}</script>';
     expect(parseProductHtml(page, 'https://rozetka.com.ua/ua/tool/p123/')?.price).toBe(299950);
     expect(parseProductHtml(page, 'https://rozetka.com.ua.evil.test/ua/tool/p123/')).toBeNull();
+  });
+  it('confirms Rozetka prices through its official UA API when HTML is blocked', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async input => {
+      const api = new URL(String(input));
+      expect(api.origin + api.pathname).toBe('https://product-api.rozetka.com.ua/v4/goods/get-main');
+      expect(api.searchParams.get('goodsId')).toBe('123');
+      expect(api.searchParams.get('country')).toBe('UA');
+      return Response.json({ success: true, data: { id: 123, title: 'Tool', price: '2999.50', old_price: 3500, sell_status: 'available' } });
+    });
+    const record = vi.fn().mockResolvedValue(undefined);
+    const summary = await crawlBatch(['https://rozetka.com.ua/ua/tool/p123/'], record, crawlOptions({}), fetcher);
+    expect(summary.saved).toBe(1);
+    expect(record).toHaveBeenCalledWith({ url: 'https://rozetka.com.ua/ua/tool/p123/', externalId: '123',
+      name: 'Tool', price: 299950, regularPrice: 350000, isAvailable: true });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it('rejects the wrong API product and keeps unavailable products unavailable', async () => {
+    const data = { id: 124, title: 'Tool', price: 100, old_price: 0, sell_status: 'unavailable' };
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async () => Response.json({ success: true, data }));
+    await expect(fetchProduct('https://rozetka.com.ua/ua/tool/p123/', fetcher)).rejects.toThrow('Invalid Rozetka');
+    data.id = 123;
+    expect(await fetchProduct('https://rozetka.com.ua/ua/tool/p123/', fetcher)).toMatchObject({ price: 10000, regularPrice: null, isAvailable: false });
+    data.sell_status = 'unknown';
+    expect((await fetchProduct('https://rozetka.com.ua/ua/tool/p123/', fetcher))?.isAvailable).toBe(false);
+  });
+  it('skips removed pages but reports access failures', async () => {
+    const record = vi.fn();
+    const removed = await crawlBatch([url], record, crawlOptions({}), vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
+    expect(removed).toMatchObject({ saved: 0, failed: 0, skipped: 1 });
+    const blocked = await crawlBatch([url], record, crawlOptions({}), vi.fn().mockResolvedValue(new Response(null, { status: 403 })));
+    expect(blocked).toMatchObject({ saved: 0, failed: 1, skipped: 0 });
+    expect(record).not.toHaveBeenCalled();
   });
   it.each([{ concurrency: 0 }, { concurrency: 21 }, { limit: -1 }, { delay: 'x' }, { limit: true }])('rejects unsafe options %j', options => {
     expect(() => crawlOptions(options)).toThrow();

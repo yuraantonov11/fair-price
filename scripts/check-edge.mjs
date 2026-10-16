@@ -14,7 +14,12 @@ assert.equal((await invoke('GET')).status, 405, 'Only POST should be allowed');
 assert.equal((await invoke('POST')).status, 401, 'Unauthenticated requests must be rejected');
 assert.equal((await invoke('POST', 'invalid-smoke-secret')).status, 401, 'Incorrect secrets must be rejected');
 const response = await invoke('POST', process.env.CRAWL_TRIGGER_SECRET);
-assert.equal(response.status, 200, 'Authenticated bounded Edge crawl must succeed');
-const summary = await response.json();
-assert(summary.saved > 0 && summary.failed === 0, 'Edge crawl must persist real observations');
-console.log('Edge authentication and live crawl passed:', JSON.stringify(summary));
+if (response.status === 409) {
+  assert.equal((await response.json()).error, 'Crawler already running');
+  console.log('Edge authentication and database lease verified; existing Node crawl continues.');
+} else {
+  assert.equal(response.status, 200, 'Authenticated bounded Edge crawl must succeed');
+  const summary = await response.json();
+  assert(summary.saved > 0 && summary.failed === 0, 'Edge crawl must persist real observations');
+  console.log('Edge authentication and live crawl passed:', JSON.stringify(summary));
+}

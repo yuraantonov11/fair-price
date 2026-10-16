@@ -7,11 +7,13 @@ loadLocalEnv();
 const args = {};
 for (let i = 2; i < process.argv.length; i += 2) {
   const key = process.argv[i]?.replace(/^--/, '');
-  if (!['limit', 'offset', 'concurrency', 'delay'].includes(key) || !process.argv[i + 1] || process.argv[i + 1].startsWith('--')) {
-    throw new Error('Expected --limit/--offset/--concurrency/--delay followed by an integer');
+  if (!['limit', 'offset', 'concurrency', 'delay', 'store'].includes(key) || !process.argv[i + 1] || process.argv[i + 1].startsWith('--')) {
+    throw new Error('Expected a supported crawler option and its value');
   }
   args[key] = process.argv[i + 1];
 }
+const store = args.store ?? process.env.CRAWL_STORE ?? 'all';
+if (!['', 'all', 'dnipro-m.ua', 'rozetka.com.ua'].includes(store)) throw new Error('Unsupported crawler store');
 const options = crawlOptions({ concurrency: process.env.CRAWL_CONCURRENCY, delay: process.env.CRAWL_DELAY_MS,
   offset: process.env.CRAWL_OFFSET, limit: process.env.CRAWL_LIMIT, ...args });
 const url = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
@@ -25,22 +27,26 @@ async function main() {
   if (leaseError) throw leaseError;
   if (!lease) throw new Error('Another crawler holds the database lease');
   try {
-    const urls = await discoverUrls('https://dnipro-m.ua/sitemap_uk.xml');
-    // Verify a bounded set of recent community URLs using the store's actual HTML,
+    const urls = store === 'rozetka.com.ua' ? [] : await discoverUrls('https://dnipro-m.ua/sitemap_uk.xml');
+    // Verify a bounded set of recent community URLs using the store's own data,
     // never the reported price. Also revisit every previously confirmed Rozetka item.
     const { data: reports, error: reportsError } = await supabase.from('community_price_reports')
       .select('url').gte('reported_at', new Date(Date.now() - 86_400_000).toISOString())
       .order('reported_at', { ascending: false }).limit(1000);
     if (reportsError) throw reportsError;
     urls.push(...(reports ?? []).map(item => item.url));
-    for (let offset = 0; ; offset += 1000) {
+    for (let offset = 0; store !== 'dnipro-m.ua'; offset += 1000) {
       const { data: products, error } = await supabase.from('products').select('url')
         .eq('store_domain', 'rozetka.com.ua').order('id').range(offset, offset + 999);
       if (error) throw error;
       urls.push(...(products ?? []).map(item => item.url));
       if (!products || products.length < 1000) break;
     }
-    const summary = await crawlBatch([...new Set(urls)].filter(isProductUrl), async product => {
+    const selected = [...new Set(urls)].filter(isProductUrl)
+      .filter(input => !store || store === 'all' || new URL(input).hostname === store);
+    console.log(JSON.stringify({ event: 'crawl-start', store: store || 'all', discoveredUrls: selected.length }));
+    let saved = 0;
+    const summary = await crawlBatch(selected, async product => {
       // Repeating the same observation is idempotent; only transient RPC failures are retried.
       for (let attempt = 0; ; attempt++) {
         const { error, status } = await supabase.rpc('record_price', {
@@ -52,6 +58,7 @@ async function main() {
         if (attempt >= 2 || (status !== 0 && status !== 429 && status < 500)) throw error;
         await new Promise(resolve => setTimeout(resolve, 500 * 2 ** attempt));
       }
+      if (++saved % 50 === 0) console.log(JSON.stringify({ event: 'crawl-progress', store: store || 'all', saved }));
     }, options);
     console.log(JSON.stringify(summary));
     assertCrawlSuccess(summary);
