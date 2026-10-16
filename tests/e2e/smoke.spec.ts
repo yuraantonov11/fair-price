@@ -75,6 +75,41 @@ test.describe('extension smoke', () => {
       .toMatch(/First confirmed price|Є перша підтверджена ціна|Honesty index|Індекс чесності/i);
   }
 
+  test('all toolbar icon states are accepted by the browser', async () => {
+    const { context, page } = await launchExtensionContext();
+    await page.route('https://dnipro-m.ua/tovar/**', route => route.fulfill({ contentType: 'text/html', body: dniproFixture() }));
+    type IconUpdate = { error: string | null; sizes: number[] };
+    type IconProbe = typeof globalThis & { __iconUpdates: IconUpdate[] };
+    try {
+      const worker = context.serviceWorkers()[0] ?? await context.waitForEvent('serviceworker');
+      await worker.evaluate(() => {
+        const updates: IconUpdate[] = [];
+        (globalThis as IconProbe).__iconUpdates = updates;
+        const setIcon = chrome.action.setIcon.bind(chrome.action);
+        chrome.action.setIcon = ((details, callback?: () => void) => {
+          setIcon(details, () => {
+            updates.push({
+              error: chrome.runtime.lastError?.message ?? null,
+              sizes: Object.values(details.imageData ?? {}).map((image: ImageData) => image.width),
+            });
+            callback?.();
+          });
+        }) as typeof chrome.action.setIcon;
+      });
+
+      // Empty, first observation, normal price, suspicious spike: exercise the
+      // actual content -> background -> native setIcon path for all four assets.
+      const scenarios = ['fp_records=0', 'fp_records=1', 'fp_records=3', 'fp_records=3&fp_scenario=spike'];
+      for (const [index, scenario] of scenarios.entries()) {
+        await page.goto(`https://dnipro-m.ua/tovar/fp-test-product/?fp_test=1&${scenario}`);
+        await expect.poll(() => worker.evaluate(() => (globalThis as IconProbe).__iconUpdates.length)).toBe(index + 1);
+        const update = await worker.evaluate(() => (globalThis as IconProbe).__iconUpdates.at(-1)!);
+        expect(update.error).toBeNull();
+        expect(update.sizes).toEqual([16, 32]);
+      }
+    } finally { await context.close(); }
+  });
+
   test('Dnipro-M: injects widget and restores after mount removal', async () => {
     const { context, page } = await launchExtensionContext();
     await page.route('https://dnipro-m.ua/tovar/**', async (route) => {

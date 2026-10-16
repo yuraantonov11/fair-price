@@ -2,6 +2,7 @@ import { getSupabase } from '@/utils/supabaseClient';
 import { createLogger } from '@/utils/logger';
 import { runtimeFailure } from '@/utils/runtimeErrors';
 import { canonicalProductUrl, validateProduct } from '@/utils/productValidation';
+import { setActionIcon } from '@/utils/actionIcon';
 import type { TracedMessage } from '@/types/messages';
 import type { HistoryPoint, RuntimeResponse } from '@/types/runtime';
 
@@ -9,8 +10,8 @@ const logger = createLogger('background', { runtime: 'background' });
 const historyRequests = new Map<string, Promise<RuntimeResponse<HistoryPoint[]>>>();
 const CONSENT_KEY = 'fp_consent_v2';
 const ICON_PATHS = {
-  success: 'icons/icon_success.png', error: 'icons/icon_error.png',
-  inactive: 'icons/icon_inactive.png', 'single-price': 'icons/icon_single-price.png',
+  success: '/icons/icon_success.png', error: '/icons/icon_error.png',
+  inactive: '/icons/icon_inactive.png', 'single-price': '/icons/icon_single-price.png',
 } as const;
 type Sender = { tab?: { id?: number }; id?: string };
 
@@ -87,7 +88,7 @@ export async function handleMessage(message: TracedMessage, sender: Sender = {})
       case 'SET_ICON': {
         if (!Object.hasOwn(ICON_PATHS, message.payload.status)) throw new Error('Invalid icon status');
         if (sender.tab?.id !== undefined) {
-          await browser.action.setIcon({ tabId: sender.tab.id, path: ICON_PATHS[message.payload.status] });
+          await setActionIcon(sender.tab.id, ICON_PATHS[message.payload.status]);
         }
         return { success: true };
       }
