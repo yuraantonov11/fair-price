@@ -61,7 +61,7 @@ npm run dev
 
 Спочатку оновіть БД, потім crawler/Edge і розширення. Нова міграція виконується транзакційно. Старі записи зберігаються для аудиту; вони не перетворюються автоматично на довірені щоденні підтвердження. Після переходу нове підтверджене вікно накопичує crawler.
 
-Перед публікацією після цієї міграції запустіть повний `Crawl Prices` без `limit` і перевірте покриття `price_observations`. Кілька успішних smoke-товарів не означають, що історія доступна для всього каталогу. Після першого обходу буде одне підтвердження на товар; оцінка накопичується за різні дні.
+Перед публікацією після цієї міграції запустіть повний `Collect Confirmed Prices` без `limit` і перевірте покриття `price_observations`. Кілька успішних smoke-товарів не означають, що історія доступна для всього каталогу. Після першого обходу буде одне підтвердження на товар; оцінка накопичується за різні дні.
 
 Сповіщення та приймання телеметрії відкладено: runtime повертає `FEATURE_DISABLED`, приватні таблиці закриті для клієнтів. Партнерські налаштування вимкнені за замовчуванням. Google Fonts не завантажується; використовуються системні шрифти. Деталі — [privacy policy](docs/privacy-policy.md).
 
@@ -98,7 +98,7 @@ npm run zip:firefox
 Інструкція: [docs/crawl-prices.md](docs/crawl-prices.md). GitHub Actions:
 
 - `ci.yml` / `release.yml`: перевірки, ізольовані E2E та артефакти Chrome/Firefox; canonical release — тег `v*`.
-- `crawl.yml`: щоденний Node crawl; потрібні variable `SUPABASE_URL` та secret `SUPABASE_SERVICE_ROLE_KEY`.
+- `collect-prices.yml`: щоденний Node crawl; потрібні variable `SUPABASE_URL` та secret `SUPABASE_SERVICE_ROLE_KEY`.
 - `deploy-crawler.yml`: резервна Edge Function; потрібні також Supabase deployment secrets і `CRAWL_TRIGGER_SECRET`.
 - `agent-self-check.yml`: офлайн-перевірка коду, опційний справжній crawler smoke.
 

@@ -52,7 +52,7 @@
 ## Deploy and Automation
 - CI build/tests: `.github/workflows/ci.yml`
 - Release by tag `v*` (canonical): `.github/workflows/release.yml`
-- Daily crawler job: `.github/workflows/crawl.yml` (requires GitHub secret `SUPABASE_SERVICE_ROLE_KEY`).
+- Daily crawler job: `.github/workflows/collect-prices.yml` (requires GitHub secret `SUPABASE_SERVICE_ROLE_KEY`).
 - Manual AI self-check: `.github/workflows/agent-self-check.yml` (workflow_dispatch, optional crawler smoke)
 - Legacy manual build-only workflow: `.github/workflows/build-release.yml` (no tag trigger)
 - Crawler function deploy: `npx supabase functions deploy crawl-prices --no-verify-jwt`
