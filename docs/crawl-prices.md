@@ -57,5 +57,8 @@ Invoke-RestMethod -Method Post -Uri "$env:SUPABASE_URL/functions/v1/crawl-prices
 - Secret: `SUPABASE_SERVICE_ROLE_KEY`.
 - Для Edge deployment: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `SUPABASE_DB_PASSWORD`, `CRAWL_TRIGGER_SECRET`.
 - Daily workflow має власну concurrency group; база додатково захищає між Node та Edge.
+- Deploy workflow перевіряє відмову без/з неправильним секретом і робить автентифікований crawl до 10 справжніх товарів.
+
+Ручний Agent Self Check також має `backend_action`: `inspect` показує стан і схему поточного проєкту; `restore` відновлює призупинений проєкт без відкату backup; `migration-plan` показує відсутні міграції; `migrate` застосовує їх через CLI. Maintenance обмежено наявним проєктом, не створює нової БД і не виводить credentials.
 
 При `ENOTFOUND` перевірте активність проєкту та DNS. При помилці RPC або відсутній таблиці застосуйте потрібні міграції й повторіть `npm run doctor:schema`. Не додавайте service-role key до розширення для обходу помилок доступу.

@@ -44,7 +44,7 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
       - name: Verify deployment
-        run: |
-          echo "✅ Function deployed successfully"
-          echo "Invoke with POST and x-crawl-secret; see docs/crawl-prices.md"
-          echo "Apply database migrations before enabling the crawler"
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          CRAWL_TRIGGER_SECRET: ${{ secrets.CRAWL_TRIGGER_SECRET }}
+        run: node scripts/check-edge.mjs

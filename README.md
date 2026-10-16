@@ -78,6 +78,8 @@ E2E використовують тільки `.output-e2e` і mock `127.0.0.1:3
 
 `npm run verify:agent` включає online `doctor`. `npm run verify:agent:crawl` включає реальний crawler smoke і потребує серверних credentials; він записує дані. Офлайн-тести crawler входять до `npm run test`.
 
+`npm run test:extension` перевіряє надсилання справжньої ціни публічним ключем і читання підтверджених спостережень. Задайте `LIVE_PRODUCT_URL` для товару, який уже обробив crawler. Скрипт не створює вигаданих тестових товарів.
+
 ## Збірка та встановлення
 
 ```powershell

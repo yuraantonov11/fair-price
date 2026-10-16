@@ -23,16 +23,23 @@ try {
   if (!offline && key) {
     await lookup(url.hostname);
     check(true, `DNS resolves ${url.hostname}`);
-    const response = await fetch(`${url.origin}/rest/v1/${schema ? 'price_observations?select=price,source,observed_at,products!inner(url)&limit=0' : ''}`, {
+    const response = await fetch(`${url.origin}/rest/v1/${schema ? 'price_observations?select=price,source,observed_at,products!inner(url)&limit=0' : 'products?select=id&limit=0'}`, {
       headers: { apikey: key, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000),
     });
     check(response.ok, `Supabase ${schema ? 'schema' : 'API'} probe: HTTP ${response.status}`);
     if (schema && response.ok) {
-      const api = await fetch(`${url.origin}/rest/v1/`, { headers: { apikey: key, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000) });
-      const spec = await api.json();
-      const params = spec.paths?.['/rpc/record_price']?.post?.parameters ?? [];
-      const properties = params.flatMap(p => Object.keys(p.schema?.properties ?? {}));
-      check(properties.includes('p_source') && properties.includes('p_category'), 'record_price V2 arguments are exposed');
+      // Hosted Supabase can restrict OpenAPI to service_role. Exercise argument
+      // resolution with deliberately invalid input: the hardened RPC must reject
+      // it before any write, so this works with the extension's public key.
+      const rpc = await fetch(`${url.origin}/rest/v1/rpc/record_price`, {
+        method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_store_domain: 'dnipro-m.ua', p_external_id: '', p_url: null, p_name: '',
+          p_price: 0, p_regular_price: null, p_is_available: true, p_promo_name: null,
+          p_category: null, p_source: 'community' }),
+        signal: AbortSignal.timeout(8000),
+      });
+      const rejection = await rpc.json();
+      check(rpc.status === 400 && rejection.code === '22023', 'Hardened record_price V2 resolves and rejects invalid input without writing');
     }
   }
 } catch (error) { check(false, `${error.code || error.cause?.code || error.name}: ${error.message}. Check Supabase project status and environment.`); }
