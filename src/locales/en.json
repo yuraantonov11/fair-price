@@ -77,7 +77,7 @@
       "heldFor": "Confirmation",
       "firstSeen": "First seen",
       "datePending": "date pending",
-      "footer": "This is only the first observation so far. We can already show how long this price has held, but a reliable discount fairness score needs a few more history records.",
+      "footer": "This price was confirmed at the time shown. A reliable discount fairness score needs confirmations on several different days.",
       "lessThanDay": "less than a day",
       "day": "1 day",
       "days": "{{count}} days",
