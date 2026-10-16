@@ -64,6 +64,14 @@ Invoke-RestMethod -Method Post -Uri "$env:SUPABASE_URL/functions/v1/crawl-prices
 - Розклад — щодня о 03:17 UTC. У публічних GitHub-репозиторіях scheduled workflows можуть вимикатися після 60 днів без активності репозиторію; перевіряйте дату останнього запуску, а не лише стан `active`.
 - Deploy workflow перевіряє відмову без/з неправильним секретом і робить автентифікований crawl до 10 справжніх товарів.
 
+Щоб перевірити саме автоматичні запуски, відфільтруйте подію `schedule`:
+
+```powershell
+gh run list --workflow collect-prices.yml --event schedule --limit 5
+```
+
+Успішний `workflow_dispatch` підтверджує роботу crawler при ручному запуску; роботу розкладу підтверджує завершений успішний run з подією `schedule`. Сторінка запусків: https://github.com/yuraantonov11/fair-price/actions/workflows/collect-prices.yml.
+
 Ручний Agent Self Check також має `backend_action`: `inspect` показує стан і схему поточного проєкту; `restore` відновлює призупинений проєкт без відкату backup; `migration-plan` показує відсутні міграції; `migrate` застосовує їх через CLI. Maintenance обмежено наявним проєктом, не створює нової БД і не виводить credentials.
 
 При `ENOTFOUND` перевірте активність проєкту та DNS. При помилці RPC або відсутній таблиці застосуйте потрібні міграції й повторіть `npm run doctor:schema`. Не додавайте service-role key до розширення для обходу помилок доступу.
