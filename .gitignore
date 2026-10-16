@@ -1,4 +1,5 @@
 .idea/
+/web-ext.config.ts
 *.DS_Store
 node_modules/
 dist/

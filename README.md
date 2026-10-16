@@ -18,10 +18,22 @@ npm run dev
 Якщо `.env` уже існує, збережіть його налаштування. Файл залишається локальним і не відстежується Git. `npm ci` генерує типи `.wxt` через `wxt prepare`.
 
 - Chrome: `npm run dev`.
+- Edge: `npm run dev:edge`.
 - Firefox: `npm run dev:firefox`; за потреби задайте `WXT_FIREFOX_BINARY`.
-- Початкова сторінка: `WXT_START_URL`.
+- Початкова сторінка при автоматичному запуску браузера: `WXT_START_URL`.
 - Логи: `VITE_LOG_LEVEL=debug|info|warn|error|silent`; у `src/` використовується лише `createLogger`.
 - `VITE_*` потрапляють у розширення. **Service-role та trigger secret мають залишатися тільки на сервері.**
+
+Для Edge запустіть `npm run dev:edge`, залиште термінал відкритим, потім:
+
+1. Відкрийте `edge://extensions` і ввімкніть **Developer mode**.
+2. Натисніть **Load unpacked / Завантажити розпаковане** та виберіть `.output/edge-mv3-dev` у корені проєкту.
+3. Відкрийте сторінку товару Dnipro-M або Rozetka. WXT оновлює dev-розширення після змін коду, поки dev-сервер працює.
+4. Натисніть `F12` або `Ctrl+Shift+I` для консолі сторінки. Для background відкрийте посилання **service worker** у картці розширення на `edge://extensions`.
+
+Віджет працює на сторінці товару магазину. Адреса `http://localhost:3000` обслуговує dev-сервер WXT для оновлення розширення.
+
+Для Chrome аналогічно використовуйте `chrome://extensions` і `.output/chrome-mv3-dev` після `npm run dev`. Автоматичне відкриття браузера потребує додаткового runner; стандартна конфігурація проєкту використовує ручне завантаження dev-папки. `Ctrl+C` зупиняє dev-сервер. Сам `supabase/functions/_shared/crawler.ts` виконується через Node/Edge, а віджет розширення — у браузері.
 
 ## Помилка «Не вдалося завантажити історію»
 

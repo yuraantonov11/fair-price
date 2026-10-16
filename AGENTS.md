@@ -39,11 +39,12 @@
 - For crawler writes also set:
   - `SUPABASE_SERVICE_ROLE_KEY`
   - optional `SUPABASE_URL` (otherwise fallback to `VITE_SUPABASE_URL`)
-- Dev browser auto-opens `WXT_START_URL` (default Dnipro-M product URL).
+- Dev outputs are loaded manually through the browser's extensions page. Optional browser runners use `WXT_START_URL` (default Dnipro-M product URL). Edge dev: `npm run dev:edge`, then load `.output/edge-mv3-dev` at `edge://extensions`.
 - Node.js >=24 is required. Online doctor checks DNS/API; `doctor:offline` validates configuration only. E2E builds use `.output-e2e` and a local HTTP backend, never production credentials.
 
 ## Development and Debug Commands
 - Chrome dev: `npm run dev`
+- Edge dev: `npm run dev:edge`
 - Firefox dev: `npm run dev:firefox`
 - Unit tests: `npm run test`
 - E2E tests: `npm run test:e2e` (install once with `npm run test:e2e:install`)
@@ -52,7 +53,7 @@
 ## Deploy and Automation
 - CI build/tests: `.github/workflows/ci.yml`
 - Release by tag `v*` (canonical): `.github/workflows/release.yml`
-- Daily crawler job: `.github/workflows/collect-prices.yml` (requires GitHub secret `SUPABASE_SERVICE_ROLE_KEY`).
+- Daily crawler job: `.github/workflows/collect-prices.yml` (requires GitHub variable `SUPABASE_URL` and secret `SUPABASE_SERVICE_ROLE_KEY`).
 - Manual AI self-check: `.github/workflows/agent-self-check.yml` (workflow_dispatch, optional crawler smoke)
 - Legacy manual build-only workflow: `.github/workflows/build-release.yml` (no tag trigger)
 - Crawler function deploy: `npx supabase functions deploy crawl-prices --no-verify-jwt`

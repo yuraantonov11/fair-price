@@ -7,6 +7,7 @@
     "setup": "npm ci",
     "setup:dev": "npm run setup && npm run test:e2e:install",
     "dev": "wxt",
+    "dev:edge": "wxt -b edge",
     "dev:firefox": "wxt -b firefox",
     "build": "wxt build",
     "build:firefox": "wxt build -b firefox",
