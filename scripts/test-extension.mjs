@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
 import { loadLocalEnv } from './env.mjs';
-import { fetchText, isProductUrl, parseProductHtml } from '../supabase/functions/_shared/crawler.ts';
+import { fetchProduct, isProductUrl } from '../supabase/functions/_shared/crawler.ts';
 import { isPublicBackendKey } from '../src/utils/backendConfig.ts';
 
 loadLocalEnv();
@@ -15,8 +15,8 @@ const client = createClient(process.env.VITE_SUPABASE_URL, process.env.VITE_SUPA
   auth: { persistSession: false },
   global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(15_000) }) },
 });
-const product = parseProductHtml(await fetchText(url), url);
-assert(product, 'Store page must contain a valid UAH product price');
+const product = await fetchProduct(url);
+assert(product, 'Store data must contain a valid UAH product price');
 const { error: saveError } = await client.rpc('record_price', {
   p_store_domain: new URL(product.url).hostname, p_external_id: product.externalId,
   p_url: product.url, p_name: product.name, p_price: product.price,
