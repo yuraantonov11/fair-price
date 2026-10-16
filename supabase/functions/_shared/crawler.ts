@@ -154,7 +154,7 @@ export function crawlOptions(values: Record<string, unknown>): CrawlOptions {
 }
 
 export async function crawlBatch(urls: string[], record: (product: ScrapedProduct) => Promise<void>,
-  options: CrawlOptions, fetcher: typeof fetch = fetch) {
+  options: CrawlOptions, fetcher: typeof fetch = fetch, onError?: (url: string, error: unknown) => void) {
   const selected = urls.slice(options.offset, options.limit === null ? undefined : options.offset + options.limit);
   const summary = { saved: 0, failed: 0, skipped: 0, processedUrls: selected.length };
   for (let i = 0; i < selected.length; i += options.concurrency) {
@@ -164,7 +164,7 @@ export async function crawlBatch(urls: string[], record: (product: ScrapedProduc
         if (!product) { summary.skipped++; return; }
         await record(product);
         summary.saved++;
-      } catch { summary.failed++; }
+      } catch (error) { summary.failed++; onError?.(url, error); }
     }));
     if (i + options.concurrency < selected.length) await new Promise(resolve => setTimeout(resolve, options.delay));
   }

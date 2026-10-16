@@ -51,8 +51,10 @@ describe('production crawler', () => {
     const record = vi.fn();
     const removed = await crawlBatch([url], record, crawlOptions({}), vi.fn().mockResolvedValue(new Response(null, { status: 404 })));
     expect(removed).toMatchObject({ saved: 0, failed: 0, skipped: 1 });
-    const blocked = await crawlBatch([url], record, crawlOptions({}), vi.fn().mockResolvedValue(new Response(null, { status: 403 })));
+    const onError = vi.fn();
+    const blocked = await crawlBatch([url], record, crawlOptions({}), vi.fn().mockResolvedValue(new Response(null, { status: 403 })), onError);
     expect(blocked).toMatchObject({ saved: 0, failed: 1, skipped: 0 });
+    expect(onError).toHaveBeenCalledWith(url, expect.objectContaining({ status: 403 }));
     expect(record).not.toHaveBeenCalled();
   });
   it.each([{ concurrency: 0 }, { concurrency: 21 }, { limit: -1 }, { delay: 'x' }, { limit: true }])('rejects unsafe options %j', options => {

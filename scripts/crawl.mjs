@@ -46,6 +46,7 @@ async function main() {
       .filter(input => !store || store === 'all' || new URL(input).hostname === store);
     console.log(JSON.stringify({ event: 'crawl-start', store: store || 'all', discoveredUrls: selected.length }));
     let saved = 0;
+    let loggedFailures = 0;
     const summary = await crawlBatch(selected, async product => {
       // Repeating the same observation is idempotent; only transient RPC failures are retried.
       for (let attempt = 0; ; attempt++) {
@@ -59,7 +60,13 @@ async function main() {
         await new Promise(resolve => setTimeout(resolve, 500 * 2 ** attempt));
       }
       if (++saved % 50 === 0) console.log(JSON.stringify({ event: 'crawl-progress', store: store || 'all', saved }));
-    }, options);
+    }, options, fetch, (input, error) => {
+      if (loggedFailures++ >= 20) return;
+      const address = new URL(input);
+      // Log only stable diagnostics, never response bodies or credentials.
+      console.error(JSON.stringify({ event: 'crawl-error', store: address.hostname, url: address.origin + address.pathname,
+        code: typeof error?.code === 'string' ? error.code : error?.name || 'UNKNOWN', status: error?.status ?? null }));
+    });
     console.log(JSON.stringify(summary));
     assertCrawlSuccess(summary);
     console.log('Crawl complete');
