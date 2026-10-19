@@ -41,10 +41,20 @@ export function historyPresentation(data: Array<Omit<HistoryPoint, 'source'> & {
       previous.count++;
     } else periods.push({ fromDay: day, toDay: day, count: 1, price: p.price, oldPrice: p.oldPrice, promoName: p.promoName });
   }
-  const chart = Array.from({ length: days }, (_, index) => {
+  const periodEnds = new Set(periods.map(period => period.toDay));
+  const periodBoundaries = new Set(periods.flatMap(period => [period.fromDay, period.toDay]));
+  const chart: Array<{ timestamp: number; price: number | null; oldPrice: number | null; periodEnd: boolean }> = [];
+  for (let index = 0; index < days; index++) {
     const timestamp = utcDay(now) - (days - 1 - index) * DAY_MS;
     const point = byDay.get(timestamp);
-    return { timestamp, price: point?.price ?? null, oldPrice: point?.oldPrice ?? null };
-  });
+    if (!point) {
+      chart.push({ timestamp, price: null, oldPrice: null, periodEnd: false });
+      continue;
+    }
+    // Keep only the start and end of an unchanged-price interval. The chart
+    // still spans the same dates, while missing days remain null and break it.
+    if (!periodBoundaries.has(timestamp)) continue;
+    chart.push({ timestamp, price: point.price, oldPrice: point.oldPrice ?? null, periodEnd: periodEnds.has(timestamp) });
+  }
   return { points, periods, chart };
 }

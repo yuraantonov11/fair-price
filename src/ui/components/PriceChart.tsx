@@ -524,7 +524,11 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
                 <XAxis type="number" scale="time" domain={['dataMin', 'dataMax']} dataKey="timestamp" tickFormatter={dateLabel} stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
                 <YAxis tickFormatter={money} stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} width={60} />
                 <Tooltip content={<CustomTooltip chartColor={colors.stroke} />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }} />
-                <Area isAnimationActive={false} type="stepAfter" connectNulls={false} dot={{ r: 2 }} dataKey="price" stroke={colors.stroke} strokeWidth={2.5} fill="url(#gradPrice)" />
+                <Area isAnimationActive={false} type="stepAfter" connectNulls={false}
+                  dot={props => props.payload?.periodEnd
+                    ? <circle cx={props.cx} cy={props.cy} r={2} fill={colors.stroke} />
+                    : null}
+                  dataKey="price" stroke={colors.stroke} strokeWidth={2.5} fill="url(#gradPrice)" />
               </AreaChart>
           )}
         </div>

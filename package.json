@@ -1,7 +1,7 @@
 {
   "name": "fair-price-extension",
   "private": true,
-  "version": "2.5.0",
+  "version": "2.5.1",
   "type": "module",
   "scripts": {
     "setup": "npm ci",

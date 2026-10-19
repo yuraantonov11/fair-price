@@ -102,6 +102,16 @@ describe('period presentation', () => {
     expect(model.chart.find(p => p.timestamp === now - 12 * 3600000 - 3 * DAY_MS)?.price).toBeNull();
     expect(model.points[0]?.price).toBe(300.99);
   });
+  it('draws a repeated price as one interval instead of one chart dot per day', () => {
+    const model = historyPresentation([point(3), point(2), point(1), point(0)], 14, now);
+    const visiblePoints = model.chart.filter(p => p.price !== null);
+    expect(model.points).toHaveLength(4);
+    expect(model.periods).toMatchObject([{ count: 4 }]);
+    expect(visiblePoints.map(p => p.timestamp)).toEqual([
+      Date.parse('2026-10-16T00:00:00Z'), Date.parse('2026-10-19T00:00:00Z'),
+    ]);
+    expect(visiblePoints.filter(p => p.periodEnd)).toHaveLength(1);
+  });
   it('selects calendar windows rather than the last N observations', () => {
     expect(historyPresentation([point(40), point(20), point(0)], 14, now).points).toHaveLength(1);
     expect(historyPresentation([point(40), point(20), point(0)], 30, now).points).toHaveLength(2);
