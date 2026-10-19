@@ -10,6 +10,7 @@ globalThis.fetch = async (input, init) => {
   if (!url.startsWith('https://crawler-audit.invalid/rest/v1/')) throw new Error('Unexpected network request in offline CLI test');
   if (url.includes('/rpc/acquire_crawl_lock')) return Response.json('00000000-0000-0000-0000-000000000001');
   if (url.includes('/rpc/release_crawl_lock')) return new Response(null, { status: 204 });
+  if (url.includes('/rpc/price_storage_budget')) return Response.json({ bytes: 1000000, discoveryAllowed: process.env.FP_DISCOVERY !== '0', writesAllowed: process.env.FP_WRITES !== '0' });
   if (url.includes('/rpc/record_price')) {
     const body = JSON.parse(String(init?.body));
     if (body.p_source !== 'system' || body.p_price !== 123400) throw new Error('Wrong source or price units');

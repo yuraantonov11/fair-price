@@ -35,7 +35,19 @@ export function createCrawlHandler(config: {
       if (options.limit === null || options.limit > 20) return Response.json({ error: 'Backup crawl limit is 20' }, { status: 400 });
       token = await rpc('acquire_crawl_lock', { p_seconds: 300 });
       if (!token) return Response.json({ error: 'Crawler already running' }, { status: 409 });
-      const urls = await discoverUrls('https://dnipro-m.ua/sitemap_uk.xml', fetcher);
+      const budget = await rpc('price_storage_budget', {});
+      if (!budget || typeof budget.writesAllowed !== 'boolean') throw new Error('Storage budget schema unavailable');
+      if (!budget.writesAllowed) return Response.json({ error: 'STORAGE_BUDGET_EXCEEDED' }, { status: 507 });
+      let urls: string[];
+      if (budget.discoveryAllowed) urls = await discoverUrls('https://dnipro-m.ua/sitemap_uk.xml', fetcher);
+      else {
+        const response = await fetcher(`${SUPABASE_URL}/rest/v1/products?select=url&store_domain=eq.dnipro-m.ua&order=id&limit=${options.limit}&offset=${options.offset}`, {
+          headers: { apikey: SERVICE_KEY!, Authorization: `Bearer ${SERVICE_KEY}` }, signal: AbortSignal.timeout(10000),
+        });
+        if (!response.ok) throw new Error('Known products unavailable');
+        urls = (await response.json() as { url: string }[]).map(product => product.url);
+        options.offset = 0;
+      }
       const summary = await crawlBatch(urls, async product => {
         await rpc('record_price', { p_store_domain: new URL(product.url).hostname, p_external_id: product.externalId,
           p_url: product.url, p_name: product.name, p_price: product.price, p_regular_price: product.regularPrice,

@@ -1,5 +1,5 @@
 import type { IPriceAdapter } from '@/adapters/IPriceAdapter';
-import { HonestyCalculator, type HonestyResult } from './HonestyCalculator';
+import { HonestyCalculator, honestyIcon, type HonestyResult } from './HonestyCalculator';
 import { MessageRouter } from '@/core/MessageRouter';
 import { createLogger } from '@/utils/logger';
 import { runtimeFailure } from '@/utils/runtimeErrors';
@@ -14,6 +14,7 @@ export class ExtensionController {
     private observer: MutationObserver | null = null;
     private processTimer: number | null = null;
     private restoreTimer: number | null = null;
+    private freshnessTimer: number | null = null;
     private generation = 0;
     private processing = false;
     private cached: { history: HistoryPoint[]; honesty: HonestyResult; view: HistoryView } | null = null;
@@ -60,6 +61,8 @@ export class ExtensionController {
     private cleanup() {
         if (this.processTimer !== null) window.clearTimeout(this.processTimer);
         if (this.restoreTimer !== null) window.clearTimeout(this.restoreTimer);
+        if (this.freshnessTimer !== null) window.clearTimeout(this.freshnessTimer);
+        this.freshnessTimer = null;
         this.processTimer = this.restoreTimer = null;
         this.disposeUI();
         this.mountPoint?.remove();
@@ -80,25 +83,31 @@ export class ExtensionController {
         return MessageRouter.send<T>({ ...message, traceId: this.traceId });
     }
 
-    private async processPage() {
+    private async processPage(forceRefresh = false) {
         const run = ++this.generation;
         const url = this.currentUrl;
         const active = () => run === this.generation && location.href === url;
         this.processing = true;
         let currentPrice: number | undefined;
+        let regularPrice: number | null | undefined;
         const show = async (history: HistoryPoint[], view: HistoryView, testMode = false) => {
             if (!active()) return;
             const honesty = HonestyCalculator.calculate(currentPrice ?? 0,
-                history.map(p => ({ ...p, date: new Date(p.date).getTime() })), this.category);
+                history.map(p => ({ ...p, date: new Date(p.date).getTime() })), this.category, { regularPrice });
             if (testMode) honesty.details = { entryCount: history.length, ...honesty.details, isTestMode: true };
             if (view.state === 'loading' || view.state === 'error') {
                 honesty.score = -1;
                 honesty.state = 'collecting';
                 honesty.verdict = undefined;
             }
-            this.cached = { history, honesty, view: { ...view, currentPrice, onRetry: () => { void this.processPage(); } } };
-            const status = view.state !== 'ready' ? 'inactive' : honesty.state === 'single-price' ? 'single-price'
-                : honesty.state !== 'analyzed' ? 'inactive' : honesty.score < 40 ? 'error' : 'success';
+            this.cached = { history, honesty, view: { ...view, currentPrice, onRetry: () => { void this.processPage(true); } } };
+            if (this.freshnessTimer !== null) window.clearTimeout(this.freshnessTimer);
+            this.freshnessTimer = view.state === 'ready' ? window.setTimeout(() => {
+                this.freshnessTimer = null;
+                // Recheck evidence age on long-lived pages without a backend request.
+                if (active() && this.cached) void show(this.cached.history, this.cached.view, testMode);
+            }, 60_000) : null;
+            const status = view.state !== 'ready' ? 'inactive' : honestyIcon(honesty);
             void this.send({ type: 'SET_ICON', payload: { status } });
             await this.injectUI();
         };
@@ -110,6 +119,7 @@ export class ExtensionController {
             const product = await this.adapter.parseProductPage();
             if (!active() || !product) return;
             currentPrice = product.price / 100;
+            regularPrice = product.regularPrice == null ? null : product.regularPrice / 100;
             this.category = product.category;
             const test = resolveChartTestMode(url, currentPrice);
             if (test.enabled) {
@@ -132,7 +142,7 @@ export class ExtensionController {
             });
             let response: RuntimeResponse<HistoryPoint[]>;
             for (let attempt = 0; ; attempt++) {
-                response = await this.send<HistoryPoint[]>({ type: 'GET_HISTORY', payload: { url: product.url } });
+                response = await this.send<HistoryPoint[]>({ type: 'GET_HISTORY', payload: { url: product.url, forceRefresh } });
                 if (!active()) return;
                 if (response.success || !response.retryable || attempt >= 2) break;
                 await new Promise(resolve => window.setTimeout(resolve, attempt === 0 ? 500 : 1500));

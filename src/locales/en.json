@@ -1,7 +1,7 @@
 {
   "chart": {
     "fairprice": "FairPrice",
-    "priceHistory": "Price history · {{count}} records",
+    "priceHistory": "History · {{count}} confirmed days",
     "priceTrend": "Price trend",
     "notEnoughData": "Not enough data.",
     "trend": {
@@ -10,16 +10,16 @@
       "stable": "Stable"
     },
     "score": {
-      "label": "Honesty index",
-      "baseline": "50 = baseline · 70+ = discount",
-      "suspicious": "Suspicious",
-      "normal": "Normal",
+      "label": "Price value",
+      "baseline": "50 = median · 65+ = good value",
+      "suspicious": "High price",
+      "normal": "Ordinary price",
       "decent": "Decent",
       "goodDeal": "Good deal"
     },
     "warnings": {
-      "volatile": "This item is naturally volatile — evaluate with caution",
-      "spike": "Possible artificial price spike before a \"discount\" detected"
+      "volatile": "Confirmed prices varied substantially",
+      "spike": "Possible price increase before a discount"
     },
     "stats": {
       "min90": "Min · 90d",
@@ -30,15 +30,16 @@
       "spike": "Spike"
     },
     "verdict": {
-      "fair": "Fair price",
-      "warning": "Worth checking",
-      "risky": "Risky price"
+      "fair": "Good value",
+      "warning": "Ordinary price",
+      "risky": "High price"
     },
     "reasonCodes": {
-      "SPIKE_14D_DETECTED": "Artificial price spike in last 14 days",
-      "PRICE_NEAR_MIN30": "Price near 30-day low — a good deal",
-      "HIGH_CATEGORY_VOLATILITY": "This category naturally fluctuates in price",
-      "INSUFFICIENT_HISTORY": "Not enough data yet — analysis improves over time"
+      "SPIKE_14D_DETECTED": "Possible price increase before a discount",
+      "PRICE_NEAR_MIN30": "Near the confirmed 30-day minimum",
+      "HIGH_CATEGORY_VOLATILITY": "Confirmed prices varied substantially",
+      "INSUFFICIENT_HISTORY": "Not enough data yet — analysis improves over time",
+      "STALE_HISTORY": "Confirmations are stale"
     },
     "source": {
       "label": "Sources:",
@@ -47,8 +48,8 @@
     },
     "baselineDelta": {
       "label": "vs median·60d",
-      "belowHint": "Current price is {{pct}}% below the 60-day median baseline ({{baseline}}). Baseline = typical price level without manipulation.",
-      "aboveHint": "Current price is {{pct}}% above the 60-day median baseline ({{baseline}}). Baseline = typical price level without manipulation."
+      "belowHint": "{{pct}}% below the median confirmed daily price ({{baseline}}).",
+      "aboveHint": "{{pct}}% above the median confirmed daily price ({{baseline}})."
     },
     "tooltip": {
       "regularPrice": "Regular price"
@@ -91,9 +92,28 @@
       "retry": "Retry",
       "networkHint": "The history service is temporarily unavailable. Please try again later.",
       "schemaHint": "The history service needs an update. Please try again later.",
-      "accessHint": "The history service declined the request. Please try again later.",
-      "saveWarning": "Could not submit the current price. Showing existing history."
-    }
+      "accessHint": "Access denied. Update the extension; if the error persists, try again later.",
+      "saveWarning": "Could not submit the current price. Showing existing history.",
+      "refresh": "Refresh history"
+    },
+    "confidence": {
+      "summary": "{{count}} confirmed days · {{coverage}}% coverage",
+      "low": "Limited evidence",
+      "medium": "Moderate evidence",
+      "high": "Strong coverage",
+      "last": "Last confirmation",
+      "preliminary": "Preliminary estimate",
+      "stale": "The last confirmation is over 48 hours old. The estimate needs updating."
+    },
+    "discount": {
+      "insufficient-data": "Insufficient earlier history to assess the promotion.",
+      "no-suspicious-pattern": "No pre-discount increase pattern found in the available history.",
+      "suspicious-pattern": "Possible price increase before a discount"
+    },
+    "window": "Chart window",
+    "days": "days",
+    "periodConfirmations": "{{count}} daily confirmations",
+    "noWindowData": "No confirmations in this window."
   },
   "popup": {
     "title": "FAIR PRICE",
@@ -163,16 +183,18 @@
     "firstPriceDiff": "Only one recorded price in history. We can show when it was last seen, but a full analysis needs more observations.",
     "collecting": "Collecting price history for analysis...",
     "insufficientData": "Not enough valid data for analysis.",
-    "spike": "Suspected manipulation: price was artificially raised to {{max}} ₴, now appearing as a \"discount\".",
-    "goodDeal": "Great price — {{pct}}% below the usual. Looks like a genuine discount.",
-    "normal": "Price within normal range. No significant discount, but no overpaying either.",
-    "highPrice": "Price is {{pct}}% above normal for this item. Worth waiting.",
-    "veryHigh": "Price is significantly above normal (+{{pct}}%). Not recommended to buy now.",
+    "spike": "Possible price increase before a discount",
+    "goodDeal": "The price is {{pct}}% below the median confirmed daily price.",
+    "normal": "The current price does not exceed the median confirmed daily price.",
+    "highPrice": "The price is {{pct}}% above the median confirmed daily price.",
+    "veryHigh": "High price: {{pct}}% above the median confirmed daily price.",
     "volatileNote": " (Note: this item's price naturally fluctuates.)",
-    "spikeVolatile": "Suspected manipulation: price was artificially raised to {{max}} ₴, now appearing as a \"discount\".",
+    "spikeVolatile": "Possible price increase before a discount",
     "goodDealVolatile": "Great price — {{pct}}% below the usual. Looks like a genuine discount. (Note: this item's price naturally fluctuates.)",
     "normalVolatile": "Price within normal range. No significant discount, but no overpaying either. (Note: this item's price naturally fluctuates.)",
     "highPriceVolatile": "Price is {{pct}}% above normal for this item. Worth waiting. (Note: this item's price naturally fluctuates.)",
-    "veryHighVolatile": "Price is significantly above normal (+{{pct}}%). Not recommended to buy now. (Note: this item's price naturally fluctuates.)"
+    "veryHighVolatile": "Price is significantly above normal (+{{pct}}%). Not recommended to buy now. (Note: this item's price naturally fluctuates.)",
+    "preliminary": "Preliminary estimate relative to the median. More daily confirmations are needed.",
+    "stale": "The last confirmation is over 48 hours old. The estimate needs updating."
   }
 }

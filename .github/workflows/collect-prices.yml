@@ -35,7 +35,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --omit=dev --ignore-scripts
 
       - name: Validate required secrets
         env:
@@ -46,6 +46,21 @@ jobs:
             echo "Add it in: Settings -> Secrets and variables -> Actions"
             exit 1
           fi
+
+      - name: Maintain and archive price history
+        id: archive
+        continue-on-error: true
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          PRICE_ARCHIVE_TOKEN: ${{ secrets.PRICE_ARCHIVE_TOKEN }}
+          PRICE_ARCHIVE_REPO: ${{ vars.PRICE_ARCHIVE_REPO || 'yuraantonov11/fair-price-archive' }}
+          PRICE_ARCHIVE_PRUNE: ${{ vars.PRICE_ARCHIVE_PRUNE || 'false' }}
+        run: npm run archive
+
+      - name: Report archive failure
+        if: steps.archive.outcome == 'failure'
+        run: echo '::warning::Archive maintenance failed; no unverified history is deleted. Crawler enforces storage limits.'
 
       - name: Run crawler script
         env:

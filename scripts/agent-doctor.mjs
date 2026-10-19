@@ -23,8 +23,10 @@ try {
   if (!offline && key) {
     await lookup(url.hostname);
     check(true, `DNS resolves ${url.hostname}`);
-    const response = await fetch(`${url.origin}/rest/v1/${schema ? 'price_observations?select=price,source,observed_at,products!inner(url)&limit=0' : 'products?select=id&limit=0'}`, {
-      headers: { apikey: key, Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(8000),
+    const response = await fetch(`${url.origin}/rest/v1/${mode === 'crawl' ? 'products?select=id&limit=0' : 'rpc/get_product_history'}`, {
+      method: mode === 'crawl' ? 'GET' : 'POST',
+      body: mode === 'crawl' ? undefined : JSON.stringify({ p_url: 'https://dnipro-m.ua/tovar/schema-probe/' }),
+      headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(8000),
     });
     check(response.ok, `Supabase ${schema ? 'schema' : 'API'} probe: HTTP ${response.status}`);
     if (schema && response.ok) {

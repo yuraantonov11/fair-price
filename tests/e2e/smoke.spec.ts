@@ -72,7 +72,7 @@ test.describe('extension smoke', () => {
       .poll(async () => {
         return mount.locator('.fair-price-app').innerText();
       }, { timeout: 10_000 })
-      .toMatch(/First confirmed price|Є перша підтверджена ціна|Honesty index|Індекс чесності/i);
+      .toMatch(/First confirmed price|Є перша підтверджена ціна|Honesty index|Індекс чесності|Price value|Вигідність ціни/i);
   }
 
   test('all toolbar icon states are accepted by the browser', async () => {
@@ -99,7 +99,7 @@ test.describe('extension smoke', () => {
 
       // Empty, first observation, normal price, suspicious spike: exercise the
       // actual content -> background -> native setIcon path for all four assets.
-      const scenarios = ['fp_records=0', 'fp_records=1', 'fp_records=3', 'fp_records=3&fp_scenario=spike'];
+      const scenarios = ['fp_records=0', 'fp_records=1', 'fp_records=30&fp_scenario=bargain', 'fp_records=30&fp_scenario=overpriced'];
       for (const [index, scenario] of scenarios.entries()) {
         await page.goto(`https://dnipro-m.ua/tovar/fp-test-product/?fp_test=1&${scenario}`);
         await expect.poll(() => worker.evaluate(() => (globalThis as IconProbe).__iconUpdates.length)).toBe(index + 1);
@@ -199,11 +199,56 @@ test.describe('extension smoke', () => {
         document.querySelector('.product-price__current')!.textContent = '7 777 ₴';
       });
       await expectWidgetInjected(page);
-      await expect(page.locator('#fair-price-container .fair-price-app')).toContainText('7777');
+      await expect(page.locator('#fair-price-container .fair-price-app')).toContainText(/7[\s\u00a0]?777/);
       await expect.poll(async () => (await (await fetch('http://127.0.0.1:38765/stats')).json()).completedFirst).toBe(true);
-      await expect(page.locator('#fair-price-container .fair-price-app')).toContainText('7777');
+      await expect(page.locator('#fair-price-container .fair-price-app')).toContainText(/7[\s\u00a0]?777/);
       await expect(page.locator('#fair-price-container')).toHaveCount(1);
     } finally { await context.close(); }
   });
+
+  test('history cache is shared between tabs and explicit refresh bypasses it', async () => {
+    const { context, page } = await launchExtensionContext();
+    await context.route('https://dnipro-m.ua/tovar/**', route => route.fulfill({ contentType: 'text/html', body: dniproFixture() }));
+    try {
+      await page.goto('https://dnipro-m.ua/tovar/cache-test/');
+      await expectWidgetInjected(page);
+      const second = await context.newPage();
+      await second.goto('https://dnipro-m.ua/tovar/cache-test/');
+      await expectWidgetInjected(second);
+      expect((await (await fetch('http://127.0.0.1:38765/stats')).json()).historyCalls).toBe(1);
+      await second.getByRole('button', { name: /Refresh history|Оновити історію/ }).click();
+      await expect.poll(async () => (await (await fetch('http://127.0.0.1:38765/stats')).json()).historyCalls).toBe(2);
+      await expectWidgetInjected(second);
+    } finally { await context.close(); }
+  });
+
+  test('identical prices form separate periods across missed days', async () => {
+    await fetch('http://127.0.0.1:38765/control?scenario=gaps');
+    const { context, page } = await launchExtensionContext();
+    await page.route('https://dnipro-m.ua/tovar/**', route => route.fulfill({ contentType: 'text/html', body: dniproFixture() }));
+    try {
+      await page.goto('https://dnipro-m.ua/tovar/gaps-test/');
+      await expectWidgetInjected(page);
+      await expect(page.locator('[data-price-periods] p')).toHaveCount(3);
+      await page.locator('#fair-price-container').screenshot({ path: test.info().outputPath('history-periods.png') });
+      await expect(page.getByRole('button', { name: /60 (days|днів)/ })).toHaveAttribute('aria-pressed', 'false');
+      await page.getByRole('button', { name: /60 (days|днів)/ }).click();
+      await expect(page.getByRole('button', { name: /60 (days|днів)/ })).toHaveAttribute('aria-pressed', 'true');
+    } finally { await context.close(); }
+  });
+
+  test('stale confirmations are visible without a categorical verdict', async () => {
+    await fetch('http://127.0.0.1:38765/control?scenario=stale');
+    const { context, page } = await launchExtensionContext();
+    await page.route('https://dnipro-m.ua/tovar/**', route => route.fulfill({ contentType: 'text/html', body: dniproFixture() }));
+    try {
+      await page.goto('https://dnipro-m.ua/tovar/stale-test/');
+      await expectWidgetInjected(page);
+      await expect(page.locator('[data-confidence]')).toContainText(/48/);
+      await expect(page.locator('[data-confidence]')).toHaveAttribute('data-confidence', 'low');
+    } finally { await context.close(); }
+  });
+
+
 });
 

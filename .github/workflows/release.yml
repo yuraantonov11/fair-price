@@ -63,3 +63,10 @@ jobs:
           generate_release_notes: true
           overwrite_files: true
           token: ${{ secrets.RELEASE_TOKEN || github.token }}
+
+      - name: Start the 14-day history API migration window
+        if: github.ref == 'refs/tags/v2.5.0'
+        env:
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: npm run archive:announce-release

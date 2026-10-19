@@ -3,6 +3,7 @@ export interface HistoryPoint {
   oldPrice?: number | null;
   promoName?: string | null;
   date: string | number;
+  day?: string; // confirmed UTC calendar day
   source: 'community' | 'system';
   lastSeenAt?: string | number;
 }

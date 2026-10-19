@@ -84,8 +84,8 @@ jobs:
         run: npm run doctor:offline && npm run verify
 
   crawler-smoke:
-    if: ${{ inputs.run_crawler_smoke == true }}
-    needs: extension-self-check
+    if: ${{ !cancelled() && inputs.run_crawler_smoke == true && needs.extension-self-check.result == 'success' && (needs.backend-maintenance.result == 'success' || needs.backend-maintenance.result == 'skipped') }}
+    needs: [extension-self-check, backend-maintenance]
     runs-on: ubuntu-latest
 
     steps:
@@ -99,7 +99,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --omit=dev --ignore-scripts
 
       - name: Validate crawler secrets
         env:

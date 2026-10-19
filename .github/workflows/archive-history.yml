@@ -1,0 +1,42 @@
+name: Verify Private Price Archive
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Verify files or prove restoration in an isolated database'
+        required: true
+        type: choice
+        options: [verify, restore]
+        default: verify
+      month:
+        description: 'Existing archived UTC month (YYYY-MM)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    concurrency:
+      group: confirmed-prices-node
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Verify or restore private archive
+        env:
+          ARCHIVE_ACTION: ${{ inputs.action }}
+          ARCHIVE_MONTH: ${{ inputs.month }}
+          PRICE_ARCHIVE_TOKEN: ${{ secrets.PRICE_ARCHIVE_TOKEN }}
+          PRICE_ARCHIVE_REPO: ${{ vars.PRICE_ARCHIVE_REPO || 'yuraantonov11/fair-price-archive' }}
+          SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: node scripts/archive.mjs "$ARCHIVE_ACTION" --month "$ARCHIVE_MONTH"

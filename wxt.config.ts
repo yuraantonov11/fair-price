@@ -24,7 +24,7 @@ export default defineConfig({
     dotSources: true,
     includeSources: ['src/**', 'public/**', 'scripts/**', 'supabase/functions/**', 'supabase/migrations/**', 'package*.json', 'tsconfig.json',
       'vitest.config.ts', 'playwright.config.ts', 'wxt.config.ts', 'README.md', '.env.example',
-      'docs/crawl-prices.md', 'docs/privacy-policy.md'],
+      'docs/crawl-prices.md', 'docs/privacy-policy.md', 'docs/archive.md'],
     excludeSources: ['**/.env', '**/.env.local', '**/.env.*.local', '**/node_modules/**',
       'src/**/.env*', 'public/**/.env*', 'scripts/**/.env*', 'supabase/**/.env*'],
   },

@@ -1,6 +1,6 @@
 # Privacy Policy — Fair Price
 
-Effective date: 2026-10-16. Developer: Yurii Antonov (yuraantonov11@gmail.com).
+Effective date: 2026-10-19. Developer: Yurii Antonov (yuraantonov11@gmail.com).
 
 ## Product information
 
@@ -10,7 +10,7 @@ Browser reports are unverified and stored separately from server-confirmed obser
 
 ## Preferences and optional features
 
-Language is stored using browser.storage.sync and may be synchronized by your browser account. Consent preferences are stored in browser.storage.local. Affiliate preferences default to off. No affiliate link rewriting is implemented in this release.
+Language is stored using browser.storage.sync and may be synchronized by your browser account. Consent preferences are stored in browser.storage.local. Confirmed history responses are cached for ten minutes in browser.storage.session (or memory where unsupported), shared between tabs, limited to 100 products and 2 MiB. This cache is not synchronized; its entries may remain until eviction or the browser session ends, but expired responses are never served. Affiliate preferences default to off. No affiliate link rewriting is implemented in this release.
 
 Price alerts are unavailable in this release. Their runtime endpoints are disabled and client access to the legacy alerts table is revoked by the hardening migration. Previous records, if any, remain restricted to the backend operator; contact the developer for deletion.
 
@@ -24,13 +24,15 @@ Feedback is sent only when you submit it. It includes the selected feedback type
 
 The extension accesses supported stores and its configured Supabase backend. It uses system fonts and does not request Google Fonts. Opening the privacy policy or issue link navigates to GitHub after your action. The optional baseline endpoint described above is a separate configurable destination.
 
-Supabase stores price reports, observations and submitted feedback in the region chosen for the configured project. Product history is retained for historical analysis; no automatic retention schedule is currently implemented. The developer can delete stored feedback or legacy alert records on request. Supabase is the infrastructure provider; see https://supabase.com/privacy.
+Supabase stores price reports, observations and submitted feedback in the region chosen for the configured project. Confirmed history is retained without automatic loss: Supabase keeps at least the latest 90 days of daily observations; complete older UTC months can be exported as compressed files to the developer's private GitHub archive. Older daily rows are removed from the working database only after the remote files are downloaded and verified, an isolated database restore has been proven, and cleanup is explicitly enabled. Change history and legacy rows remain in Supabase. Unverified community reports are deleted after seven days by scheduled maintenance. Archive credentials are never included in the extension. See https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement.
+
+The public history API returns at most 60 days for one supported product URL. Direct table reads are restricted after the documented client migration window. Data returned to an unauthenticated extension can still be collected through repeated requests; a private archive does not make the extension's displayed history secret. The developer can delete stored feedback or legacy alert records on request. Supabase is the infrastructure provider; see https://supabase.com/privacy.
 
 The extension does not read store account credentials, payment details, cookies, or unrelated page content. Its normal automatic product-reporting flow runs on supported product pages; server crawls run independently of your browser.
 
 ## Permissions
 
-`storage` saves preferences. Store host permissions allow content scripts to read product information. Backend host permission allows sending reports and loading history. Firefox declares browsing activity and website content because URLs and product information are transmitted. No browser notification permission is requested while alerts are deferred.
+`storage` saves preferences and the bounded session history cache. Store host permissions allow content scripts to read product information. Backend host permission allows sending reports and loading history. Firefox declares browsing activity and website content because URLs and product information are transmitted. No browser notification permission is requested while alerts are deferred.
 
 ## Contact
 

@@ -27,17 +27,26 @@ async function main() {
   if (leaseError) throw leaseError;
   if (!lease) throw new Error('Another crawler holds the database lease');
   try {
-    const urls = store === 'rozetka.com.ua' ? [] : await discoverUrls('https://dnipro-m.ua/sitemap_uk.xml');
+    const { data: budget, error: budgetError } = await supabase.rpc('price_storage_budget');
+    if (budgetError) throw budgetError;
+    if (!budget || typeof budget.writesAllowed !== 'boolean') throw new Error('Storage budget schema unavailable');
+    console.log(JSON.stringify({ event: 'storage-budget', ...budget }));
+    if (!budget.writesAllowed) throw new Error('STORAGE_BUDGET_EXCEEDED');
+    const urls = !budget.discoveryAllowed || store === 'rozetka.com.ua' ? [] : await discoverUrls('https://dnipro-m.ua/sitemap_uk.xml');
     // Verify a bounded set of recent community URLs using the store's own data,
     // never the reported price. Also revisit every previously confirmed Rozetka item.
-    const { data: reports, error: reportsError } = await supabase.from('community_price_reports')
+    if (budget.discoveryAllowed) {
+      const { data: reports, error: reportsError } = await supabase.from('community_price_reports')
       .select('url').gte('reported_at', new Date(Date.now() - 86_400_000).toISOString())
       .order('reported_at', { ascending: false }).limit(1000);
-    if (reportsError) throw reportsError;
-    urls.push(...(reports ?? []).map(item => item.url));
-    for (let offset = 0; store !== 'dnipro-m.ua'; offset += 1000) {
-      const { data: products, error } = await supabase.from('products').select('url')
-        .eq('store_domain', 'rozetka.com.ua').order('id').range(offset, offset + 999);
+      if (reportsError) throw reportsError;
+      urls.push(...(reports ?? []).map(item => item.url));
+    }
+    for (let offset = 0; !budget.discoveryAllowed || store !== 'dnipro-m.ua'; offset += 1000) {
+      let query = supabase.from('products').select('url');
+      const knownStore = budget.discoveryAllowed ? 'rozetka.com.ua' : !store || store === 'all' ? null : store;
+      if (knownStore) query = query.eq('store_domain', knownStore);
+      const { data: products, error } = await query.order('id').range(offset, offset + 999);
       if (error) throw error;
       urls.push(...(products ?? []).map(item => item.url));
       if (!products || products.length < 1000) break;

@@ -5,9 +5,10 @@ import { canonicalProductUrl, validateProduct } from '@/utils/productValidation'
 import { setActionIcon } from '@/utils/actionIcon';
 import type { TracedMessage } from '@/types/messages';
 import type { HistoryPoint, RuntimeResponse } from '@/types/runtime';
+import { HistoryCache } from '@/core/HistoryCache';
 
 const logger = createLogger('background', { runtime: 'background' });
-const historyRequests = new Map<string, Promise<RuntimeResponse<HistoryPoint[]>>>();
+const historyCache = new HistoryCache();
 const CONSENT_KEY = 'fp_consent_v2';
 const ICON_PATHS = {
   success: '/icons/icon_success.png', error: '/icons/icon_error.png',
@@ -24,16 +25,13 @@ async function consent() {
 
 async function loadHistory(url: string): Promise<RuntimeResponse<HistoryPoint[]>> {
   try {
-    const { data, error, status } = await getSupabase().from('price_observations')
-      .select('price, regular_price, promo_name, observed_at, source, products!inner(url)')
-      .eq('products.url', url).eq('source', 'system').eq('is_available', true)
-      .gte('observed_at', new Date(Date.now() - 60 * 86_400_000).toISOString())
-      .order('observed_at', { ascending: true }).limit(62);
+    const { data, error, status } = await getSupabase().rpc('get_product_history', { p_url: url });
     if (error) throw { ...error, status };
-    return { success: true, data: (data ?? []).map(item => ({
+    return { success: true, data: (data ?? []).map((item: { price: number; regular_price: number | null;
+      promo_name: string | null; observed_at: string; observed_day: string }) => ({
       price: item.price / 100,
       oldPrice: item.regular_price == null ? null : item.regular_price / 100,
-      promoName: item.promo_name, date: item.observed_at, lastSeenAt: item.observed_at,
+      promoName: item.promo_name, date: item.observed_at, day: item.observed_day, lastSeenAt: item.observed_at,
       source: 'system' as const,
     })) };
   } catch (error) {
@@ -69,21 +67,10 @@ export async function handleMessage(message: TracedMessage, sender: Sender = {})
       }
       case 'GET_HISTORY': {
         const url = canonicalProductUrl(message.payload.url);
-        const key = `${sender.tab?.id ?? 'popup'}:${url}`;
-        let request = historyRequests.get(key);
-        if (!request) {
-          request = loadHistory(url);
-          historyRequests.set(key, request);
-        }
-        try {
-          const result = await request;
-          if (!result.success) log.warn('History request failed', {
-            url, store: new URL(url).hostname, ...result,
-          });
-          return result;
-        } finally {
-          if (historyRequests.get(key) === request) historyRequests.delete(key);
-        }
+        const key = `${import.meta.env.VITE_SUPABASE_URL}:${url}`;
+        const result = await historyCache.get(key, () => loadHistory(url), message.payload.forceRefresh === true);
+        if (!result.success) log.warn('History request failed', { url, store: new URL(url).hostname, ...result });
+        return result;
       }
       case 'SET_ICON': {
         if (!Object.hasOwn(ICON_PATHS, message.payload.status)) throw new Error('Invalid icon status');

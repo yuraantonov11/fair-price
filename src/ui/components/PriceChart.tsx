@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import '@/utils/i18n';
 import type { HonestyResult, PriceTrend, HonestyVerdict } from '@/types/honesty';
 import type { HistoryView } from '@/types/runtime';
+import { historyPresentation } from '@/core/history';
+import { canShowVerdict } from '@/core/HonestyCalculator';
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid
 } from 'recharts';
@@ -13,6 +15,7 @@ type PriceHistory = {
   promoName?: string | null;
   date: string | number;
   source?: 'community' | 'system' | string;
+  day?: string;
 };
 
 interface PriceChartProps {
@@ -23,11 +26,15 @@ interface PriceChartProps {
 }
 
 const DEFAULT_CHART_LOCALE = 'uk-UA';
+const money = (value: number) => value.toLocaleString(DEFAULT_CHART_LOCALE, { maximumFractionDigits: 2 });
+const dateLabel = (value: number) => new Date(value).toLocaleDateString(DEFAULT_CHART_LOCALE,
+  { day: '2-digit', month: 'short', timeZone: 'UTC' });
+const NEUTRAL = { text: 'text-slate-300', stroke: '#94a3b8', bg: 'bg-slate-500/10', border: 'border-slate-500/20' };
 
 // Хелпери
 function scoreColor(score: number) {
-  if (score < 35) return { text: 'text-rose-500', stroke: '#f43f5e', bg: 'bg-rose-500/10', border: 'border-rose-500/20' };
-  if (score < 55) return { text: 'text-amber-400', stroke: '#fbbf24', bg: 'bg-amber-400/10', border: 'border-amber-400/20' };
+  if (score < 40) return { text: 'text-rose-500', stroke: '#f43f5e', bg: 'bg-rose-500/10', border: 'border-rose-500/20' };
+  if (score < 65) return { text: 'text-amber-400', stroke: '#fbbf24', bg: 'bg-amber-400/10', border: 'border-amber-400/20' };
   return { text: 'text-emerald-400', stroke: '#34d399', bg: 'bg-emerald-400/10', border: 'border-emerald-400/20' };
 }
 
@@ -88,7 +95,7 @@ const BaselineDeltaChip = ({ pct, baselineValue }: { pct: number; baselineValue?
     : abs > 15
       ? 'bg-rose-500/15 border-rose-500/30 text-rose-200'
       : 'bg-amber-500/15 border-amber-500/30 text-amber-200';
-  const baselineStr = baselineValue ? `${Math.round(baselineValue)} ₴` : '';
+  const baselineStr = baselineValue ? `${money(baselineValue)} ₴` : '';
   const hintKey = isBelow ? 'chart.baselineDelta.belowHint' : 'chart.baselineDelta.aboveHint';
   const hint = t(hintKey, { pct: abs, baseline: baselineStr });
 
@@ -132,14 +139,14 @@ const SourceLegend = ({ data }: { data: PriceHistory[] }) => {
 };
 
 // Круговий індикатор чесності
-const ScoreRing = ({ score }: { score: number }) => {
+const ScoreRing = ({ score, preliminary }: { score: number; preliminary: boolean }) => {
   const { t } = useTranslation();
-  const colors = scoreColor(score);
+  const colors = preliminary ? NEUTRAL : scoreColor(score);
   const r = 28;
   const circ = 2 * Math.PI * r;
   const filled = (score / 100) * circ;
-  const labelKey = score < 35 ? 'chart.score.suspicious' : score < 55 ? 'chart.score.normal' : score < 70 ? 'chart.score.decent' : 'chart.score.goodDeal';
-  const emoji    = score < 35 ? '🚨' : score < 55 ? 'ℹ️' : score < 70 ? '👍' : '✅';
+  const labelKey = preliminary ? 'chart.confidence.preliminary' : score < 40 ? 'chart.score.suspicious' : score < 65 ? 'chart.score.normal' : 'chart.score.goodDeal';
+  const emoji = preliminary ? 'ℹ️' : score < 40 ? '🚨' : score < 65 ? 'ℹ️' : '✅';
 
   return (
       <div className="flex items-center gap-3">
@@ -210,11 +217,11 @@ const PreviewCollectingCard = ({
   let currentPriceMsg = '';
   if (effectiveCurrentPrice != null && minPrice > 0 && maxPrice > 0) {
     if (effectiveCurrentPrice <= minPrice) {
-      currentPriceMsg = t('chart.preview.currentAtMin', { price: Math.round(effectiveCurrentPrice) });
+      currentPriceMsg = t('chart.preview.currentAtMin', { price: money(effectiveCurrentPrice) });
     } else if (effectiveCurrentPrice >= maxPrice) {
-      currentPriceMsg = t('chart.preview.currentAtMax', { price: Math.round(effectiveCurrentPrice), pct: Math.max(0, currentVsMinPct) });
+      currentPriceMsg = t('chart.preview.currentAtMax', { price: money(effectiveCurrentPrice), pct: Math.max(0, currentVsMinPct) });
     } else {
-      currentPriceMsg = t('chart.preview.currentBetween', { price: Math.round(effectiveCurrentPrice), pct: Math.max(0, currentVsMinPct) });
+      currentPriceMsg = t('chart.preview.currentBetween', { price: money(effectiveCurrentPrice), pct: Math.max(0, currentVsMinPct) });
     }
   }
 
@@ -231,11 +238,11 @@ const PreviewCollectingCard = ({
       <div className="grid grid-cols-2 gap-2.5">
         <div className="rounded-xl border border-white/5 bg-white/3 px-3 py-2.5">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.preview.lowestObserved')}</div>
-          <div className="mt-1 text-base font-black text-emerald-400">{minPrice > 0 ? `${Math.round(minPrice)} ₴` : '—'}</div>
+          <div className="mt-1 text-base font-black text-emerald-400">{minPrice > 0 ? `${money(minPrice)} ₴` : '—'}</div>
         </div>
         <div className="rounded-xl border border-white/5 bg-white/3 px-3 py-2.5">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.preview.highestObserved')}</div>
-          <div className="mt-1 text-base font-black text-amber-400">{maxPrice > 0 ? `${Math.round(maxPrice)} ₴` : '—'}</div>
+          <div className="mt-1 text-base font-black text-amber-400">{maxPrice > 0 ? `${money(maxPrice)} ₴` : '—'}</div>
         </div>
       </div>
 
@@ -252,8 +259,8 @@ const PreviewCollectingCard = ({
           <div className="flex flex-col gap-1">
             {priceList.map((p, idx) => (
               <div key={idx} className="flex items-center justify-between text-xs rounded-lg bg-white/3 px-2.5 py-1.5">
-                <span className="text-slate-300">{new Date(p.date).toLocaleDateString(DEFAULT_CHART_LOCALE)}</span>
-                <span className="font-black text-slate-100">{Math.round(p.price)} ₴</span>
+                <span className="text-slate-300">{new Date(p.date).toLocaleDateString(DEFAULT_CHART_LOCALE, { timeZone: 'UTC' })}</span>
+                <span className="font-black text-slate-100">{money(p.price)} ₴</span>
               </div>
             ))}
           </div>
@@ -281,7 +288,7 @@ const SinglePriceCard = ({
 
   const dateLabel = (() => {
     if (!firstSeenAt || !Number.isFinite(firstSeenAt)) return t('chart.singlePrice.datePending');
-    return new Date(firstSeenAt).toLocaleDateString(DEFAULT_CHART_LOCALE, { day: '2-digit', month: 'long', year: 'numeric' });
+    return new Date(firstSeenAt).toLocaleDateString(DEFAULT_CHART_LOCALE, { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'UTC' });
   })();
 
   return (
@@ -297,7 +304,7 @@ const SinglePriceCard = ({
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="rounded-xl border border-white/5 bg-white/3 px-3 py-3">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.singlePrice.observedPrice')}</div>
-          <div className="mt-1 text-lg font-black text-white">{observedPrice ? `${Math.round(observedPrice)} ₴` : '—'}</div>
+          <div className="mt-1 text-lg font-black text-white">{observedPrice ? `${money(observedPrice)} ₴` : '—'}</div>
         </div>
         <div className="rounded-xl border border-white/5 bg-white/3 px-3 py-3">
           <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.singlePrice.heldFor')}</div>
@@ -321,11 +328,11 @@ const CustomTooltip = ({ active, payload, label, chartColor }: any) => {
     const data = payload[0].payload;
     return (
         <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl shadow-2xl flex flex-col gap-1 min-w-30 font-sans z-50">
-          <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">{label}</span>
+          <span className="text-[10px] text-slate-400 uppercase tracking-wider font-bold">{dateLabel(Number(label))}</span>
           <div className="flex flex-col">
-            <span className="text-sm font-black" style={{ color: chartColor }}>{data.price} ₴</span>
+            <span className="text-sm font-black" style={{ color: chartColor }}>{money(data.price)} ₴</span>
             {data.oldPrice && (
-              <span className="text-xs text-slate-500 line-through font-medium">{t('chart.tooltip.regularPrice')}: {data.oldPrice} ₴</span>
+              <span className="text-xs text-slate-500 line-through font-medium">{t('chart.tooltip.regularPrice')}: {money(data.oldPrice)} ₴</span>
             )}
           </div>
         </div>
@@ -344,6 +351,9 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const [chartWidth, setChartWidth] = useState(0);
+  const [days, setDays] = useState(14);
+  const presentation = historyPresentation(data, days);
+  const preliminary = !canShowVerdict(honesty);
   const isTestMode = Boolean(honesty.details?.isTestMode);
   const themed = (content: React.ReactNode) => (
     <div className="fair-price-app w-full block" data-store={store}>
@@ -354,6 +364,16 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
     <div className="relative">
       {isTestMode && <TestModeBadge />}
       {view?.saveFailed && <p role="status" className="text-xs text-amber-300 p-2">{t('chart.history.saveWarning')}</p>}
+      {view?.state !== 'loading' && view?.state !== 'error' && (view?.onRetry || honesty.confidence) && <div className="bg-slate-900 rounded-xl border border-slate-700 mb-2 p-2 font-sans">
+      {view?.state === 'ready' && view.currentPrice != null && <p className="text-xs text-slate-300 p-2">{t('chart.history.currentPrice')}: {money(view.currentPrice)} ₴</p>}
+      {view?.onRetry && <button type="button" className="text-xs text-slate-300 p-2 underline" onClick={view.onRetry}>{t('chart.history.refresh')}</button>}
+      {honesty.confidence && <div className="text-xs text-slate-300 p-2" data-confidence={honesty.confidence.level}>
+        {t('chart.confidence.summary', { count: honesty.confidence.confirmedDays, coverage: Math.round(honesty.confidence.coverage * 100) })}
+        {' · '}{t(`chart.confidence.${honesty.confidence.level}`)}
+        {honesty.confidence.lastConfirmedAt != null && <span> · {t('chart.confidence.last')}: {new Date(honesty.confidence.lastConfirmedAt).toLocaleString(DEFAULT_CHART_LOCALE, { timeZone: 'UTC' })} UTC</span>}
+        {honesty.confidence.stale && <p role="status">{t('chart.confidence.stale')}</p>}
+      </div>}
+      </div>}
       {content}
     </div>
   );
@@ -423,31 +443,18 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
     return themed(withTestBadge(<CollectingCard count={normalizedData.length} message={translatedMessage} />));
   }
 
-  const groupedByDay = normalizedData.reduce((acc, item) => {
-    const dateObj = new Date(item.date);
-    if (isNaN(dateObj.getTime())) return acc;
-    const dateStr = dateObj.toLocaleDateString(DEFAULT_CHART_LOCALE, { day: '2-digit', month: 'short' });
-    acc[dateObj.toISOString().slice(0, 10)] = {
-      dateStr,
-      price: Math.round(item.price),
-      oldPrice: item.oldPrice ? Math.round(item.oldPrice) : null,
-      timestamp: item.timestamp,
-    };
-    return acc;
-  }, {} as Record<string, any>);
-
-  const chartData = Object.values(groupedByDay).sort((a: any, b: any) => a.timestamp - b.timestamp).slice(-14);
-  const colors = scoreColor(honesty.score);
+  const chartData = presentation.chart;
+  const colors = preliminary ? NEUTRAL : scoreColor(honesty.score);
 
   return themed(withTestBadge(
       <div className="flex flex-col gap-3 bg-linear-to-br from-slate-900/95 to-slate-800/95 rounded-2xl border border-white/5 p-4 shadow-xl font-sans">
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
             <span className="text-[9px] font-bold uppercase tracking-widest text-slate-500">{t('chart.fairprice')}</span>
-            <span className="text-xs text-slate-400 font-medium">{t('chart.priceHistory', { count: chartData.length })}</span>
+            <span className="text-xs text-slate-400 font-medium">{t('chart.priceHistory', { count: presentation.points.length })}</span>
           </div>
           <div className="flex items-center gap-2">
-            {honesty.verdict && (
+            {honesty.verdict && !preliminary && (
               <span className={`text-[10px] font-bold px-2 py-1 rounded-lg border ${verdictCls(honesty.verdict)}`}>
                 {t(`chart.verdict.${honesty.verdict}`)}
               </span>
@@ -475,6 +482,18 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
           </div>
         )}
 
+        {honesty.discount && honesty.discount.status !== 'not-advertised' && <p className="text-xs text-slate-300" data-discount={honesty.discount.status}>{t(`chart.discount.${honesty.discount.status}`)}</p>}
+        <div role="group" aria-label={t('chart.window')} className="flex gap-2">
+          {[14, 30, 60].map(value => <button key={value} type="button" aria-pressed={days === value}
+            className="text-xs text-slate-200 rounded border border-slate-600 px-2 py-1" onClick={() => setDays(value)}>{value} {t('chart.days')}</button>)}
+        </div>
+        <div className="max-h-32 overflow-auto text-xs text-slate-300" data-price-periods>
+          {presentation.periods.map(period => <p key={period.fromDay}>
+            {money(period.price)} ₴ · {dateLabel(period.fromDay)}{period.toDay !== period.fromDay ? `–${dateLabel(period.toDay)}` : ''}
+            {' · '}{t('chart.periodConfirmations', { count: period.count })}
+          </p>)}
+          {!presentation.points.length && <p>{t('chart.noWindowData')}</p>}
+        </div>
         <div className={`p-2.5 rounded-xl ${colors.bg} ${colors.border} border text-xs text-slate-200 font-medium leading-relaxed`}>
           {translatedMessage}
         </div>
@@ -494,7 +513,7 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
 
         <div className="w-full h-45 mt-1 relative" ref={containerRef}>
           {chartWidth > 0 && (
-              <AreaChart width={chartWidth} height={180} data={chartData} margin={{ top: 5, right: 0, left: -25, bottom: 0 }}>
+              <AreaChart width={chartWidth} height={180} data={chartData} margin={{ top: 5, right: 0, left: 0, bottom: 0 }}>
                 <defs>
                   <linearGradient id="gradPrice" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor={colors.stroke} stopOpacity={0.4} />
@@ -502,10 +521,10 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="dateStr" stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
-                <YAxis stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} width={40} />
+                <XAxis type="number" scale="time" domain={['dataMin', 'dataMax']} dataKey="timestamp" tickFormatter={dateLabel} stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} />
+                <YAxis tickFormatter={money} stroke="rgba(148,163,184,0.3)" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} axisLine={false} width={60} />
                 <Tooltip content={<CustomTooltip chartColor={colors.stroke} />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1 }} />
-                <Area isAnimationActive={false} type="monotone" dataKey="price" stroke={colors.stroke} strokeWidth={2.5} fill="url(#gradPrice)" />
+                <Area isAnimationActive={false} type="stepAfter" connectNulls={false} dot={{ r: 2 }} dataKey="price" stroke={colors.stroke} strokeWidth={2.5} fill="url(#gradPrice)" />
               </AreaChart>
           )}
         </div>
@@ -518,7 +537,7 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
                 {honesty.metrics ? t('chart.stats.min30') : t('chart.stats.min90')}
               </span>
               <span className="text-xs font-black text-emerald-400 mt-0.5">
-                {Math.round(honesty.metrics?.min30 ?? honesty.details?.min90 ?? 0)} ₴
+                {money(honesty.metrics?.min30 ?? honesty.details?.min90 ?? 0)} ₴
               </span>
             </div>
             <div className="flex flex-col items-center rounded-lg bg-white/5 px-2 py-1.5 border border-white/10">
@@ -526,7 +545,7 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
                 {honesty.metrics ? t('chart.stats.median60') : t('chart.stats.median')}
               </span>
               <span className="text-xs font-black text-slate-200 mt-0.5">
-                {Math.round(honesty.metrics?.median60 ?? honesty.details?.median90 ?? 0)} ₴
+                {money(honesty.metrics?.median60 ?? honesty.details?.median90 ?? 0)} ₴
               </span>
             </div>
             <div className="flex flex-col items-center rounded-lg bg-white/3 px-2 py-1.5 border border-white/5">
@@ -540,7 +559,7 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
               ) : (
                 <>
                   <span className="text-[9px] uppercase tracking-wider text-slate-500 font-bold">{t('chart.stats.max90')}</span>
-                  <span className="text-xs font-black text-rose-400 mt-0.5">{Math.round(honesty.details?.max90 ?? 0)} ₴</span>
+                  <span className="text-xs font-black text-rose-400 mt-0.5">{money(honesty.details?.max90 ?? 0)} ₴</span>
                 </>
               )}
             </div>
@@ -553,9 +572,9 @@ export const PriceChart = ({ data, honesty, store, view }: PriceChartProps) => {
               <div className="w-4 h-1 rounded-full" style={{ backgroundColor: colors.stroke }} />
               <span className="text-[10px] text-slate-400 font-medium">{t('chart.priceTrend')}</span>
             </div>
-            <SourceLegend data={data} />
+            <SourceLegend data={presentation.points} />
           </div>
-          {honesty.score !== -1 && <ScoreRing score={honesty.score} />}
+          {honesty.score !== -1 && <ScoreRing score={honesty.score} preliminary={preliminary} />}
         </div>
       </div>
   ));

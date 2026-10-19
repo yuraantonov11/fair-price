@@ -20,6 +20,7 @@ describe('Edge trigger boundary', () => {
       const url = String(input);
       if (url.includes('/rpc/')) {
         payloads.push({ path: url, body: JSON.parse(String(init?.body)) });
+        if (url.endsWith('price_storage_budget')) return Response.json({ discoveryAllowed: true, writesAllowed: true });
         return url.endsWith('acquire_crawl_lock') ? Response.json('lease-token') : new Response(null, { status: 204 });
       }
       return new Response(url.includes('sitemap') ? '<urlset><url><loc>https://dnipro-m.ua/tovar/test/</loc></url></urlset>'
@@ -39,5 +40,31 @@ describe('Edge trigger boundary', () => {
     expect((await handler(request('secret', '{"limit":21}'))).status).toBe(400);
     expect((await handler(request('secret', 'invalid json'))).status).toBe(400);
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+  it('stops before store requests at the write limit and always releases its lease', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async input => {
+      const url = String(input);
+      if (url.endsWith('acquire_crawl_lock')) return Response.json('lease');
+      if (url.endsWith('price_storage_budget')) return Response.json({ writesAllowed: false, discoveryAllowed: false });
+      if (url.endsWith('release_crawl_lock')) return new Response(null, { status: 204 });
+      throw new Error('Unexpected request after storage limit');
+    });
+    const response = await createCrawlHandler({ url: 'https://backend.test', serviceKey: 'server', secret: 'secret', fetcher })(request('secret'));
+    expect(response.status).toBe(507);
+    expect(await response.json()).toEqual({ error: 'STORAGE_BUDGET_EXCEEDED' });
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+  it('uses only known products when discovery is disabled', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async input => {
+      const url = String(input);
+      if (url.endsWith('acquire_crawl_lock')) return Response.json('lease');
+      if (url.endsWith('price_storage_budget')) return Response.json({ writesAllowed: true, discoveryAllowed: false });
+      if (url.includes('/products?')) return Response.json([]);
+      if (url.endsWith('release_crawl_lock')) return new Response(null, { status: 204 });
+      throw new Error('Unexpected discovery request');
+    });
+    await createCrawlHandler({ url: 'https://backend.test', serviceKey: 'server', secret: 'secret', fetcher })(request('secret'));
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('/products?'))).toBe(true);
+    expect(fetcher.mock.calls.some(([url]) => String(url).includes('sitemap'))).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-export type ChartTestScenario = 'flat' | 'discount' | 'spike' | 'volatile' | 'rising';
+export type ChartTestScenario = 'flat' | 'discount' | 'spike' | 'volatile' | 'rising' | 'bargain' | 'overpriced';
 
 type HistoryPoint = {
   price: number;
@@ -32,7 +32,7 @@ function parsePositiveNumber(input: string | null): number | undefined {
 
 function normalizeScenario(input: string | null): ChartTestScenario {
   const value = (input || '').toLowerCase();
-  if (value === 'discount' || value === 'spike' || value === 'volatile' || value === 'rising') return value;
+  if (value === 'discount' || value === 'spike' || value === 'volatile' || value === 'rising' || value === 'bargain' || value === 'overpriced') return value;
   return 'flat';
 }
 
@@ -46,6 +46,9 @@ function generatePriceByScenario(
 
   const progress = index / (count - 1);
   const wave = [0, -0.02, 0.015, -0.01, 0.01][index % 5]!;
+
+  if (scenario === 'bargain') return Math.round(basePrice * 2);
+  if (scenario === 'overpriced') return Math.round(basePrice * .6);
 
   if (scenario === 'discount') {
     const multiplier = 1.35 - progress * 0.35;

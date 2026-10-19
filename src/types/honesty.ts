@@ -2,6 +2,15 @@ export type HonestyState = 'invalid' | 'collecting' | 'single-price' | 'analyzed
 export type PriceTrend = 'rising' | 'falling' | 'stable';
 export type HonestyVerdict = 'fair' | 'warning' | 'risky';
 
+export interface HistoryConfidence {
+  level: 'low' | 'medium' | 'high';
+  confirmedDays: number;
+  spanDays: number;
+  coverage: number;
+  lastConfirmedAt?: number;
+  stale: boolean;
+}
+
 export interface HonestyMessageParams {
   max?: number;
   pct?: number;
@@ -11,6 +20,7 @@ export interface HonestyMetrics {
   median60: number;
   min30: number;
   spike14Pct: number;
+  /** @deprecated Economic value has no promotion/volatility penalties. Always zero. */
   penalty: number;
 }
 
@@ -31,7 +41,7 @@ export interface HonestyDetails {
   priceVsMedianPct?: number; // negative = cheaper than median (good)
   trend?: PriceTrend;
   isVolatile?: boolean; // stddev/median > 25%
-  hasSpike?: boolean; // detected artificial inflation
+  hasSpike?: boolean; // possible increase before an advertised discount
 
   // analyzed — legacy (kept for backward compat)
   /** @deprecated use median60 */
@@ -43,6 +53,8 @@ export interface HonestyDetails {
 }
 
 export interface HonestyResult {
+  confidence?: HistoryConfidence;
+  discount?: { status: 'not-advertised' | 'insufficient-data' | 'no-suspicious-pattern' | 'suspicious-pattern' };
   score: number;
   /** Translation key from calculator namespace */
   messageKey: string;

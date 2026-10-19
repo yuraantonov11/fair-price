@@ -25,11 +25,7 @@ const { error: saveError } = await client.rpc('record_price', {
 });
 assert(!saveError, 'Live community price submission failed: ' + (saveError?.code || 'unknown'));
 console.log('Live community submission: OK (' + product.price / 100 + ' UAH)');
-const { data, error: historyError } = await client.from('price_observations')
-  .select('price, observed_at, source, products!inner(url)')
-  .eq('products.url', product.url).eq('source', 'system').eq('is_available', true)
-  .gte('observed_at', new Date(Date.now() - 60 * 86_400_000).toISOString())
-  .order('observed_at', { ascending: true }).limit(62);
+const { data, error: historyError } = await client.rpc('get_product_history', { p_url: product.url });
 assert(!historyError, 'Live history read failed: ' + (historyError?.code || 'unknown'));
 assert(data.length > 0, 'Run the real crawler first: no trusted observations for this product');
 assert(data.every(row => Number.isSafeInteger(row.price) && row.price > 0 && row.source === 'system'));

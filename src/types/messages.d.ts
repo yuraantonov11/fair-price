@@ -10,6 +10,7 @@ export interface GetHistoryMessage {
     payload: {
         url: string;
         sku?: string;
+        forceRefresh?: boolean;
     };
 }
 export interface SetIconMessage {

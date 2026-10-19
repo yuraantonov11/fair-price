@@ -1,7 +1,7 @@
 {
   "name": "fair-price-extension",
   "private": true,
-  "version": "2.4.1",
+  "version": "2.5.0",
   "type": "module",
   "scripts": {
     "setup": "npm ci",
@@ -36,7 +36,12 @@
     "postinstall": "wxt prepare",
     "doctor:offline": "node scripts/agent-doctor.mjs --mode core --offline",
     "doctor:schema": "node scripts/agent-doctor.mjs --mode core --schema",
-    "build:e2e": "node scripts/build-e2e.mjs"
+    "build:e2e": "node scripts/build-e2e.mjs",
+    "archive": "node scripts/archive.mjs auto",
+    "archive:verify": "node scripts/archive.mjs verify",
+    "archive:restore": "node scripts/archive.mjs restore",
+    "archive:announce-release": "node scripts/archive.mjs announce-release",
+    "archive:privacy": "node scripts/archive.mjs privacy"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.100.0",

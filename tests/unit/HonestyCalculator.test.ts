@@ -1,280 +1,109 @@
-import { describe, expect, it } from 'vitest';
-import { HonestyCalculator } from '@/core/HonestyCalculator';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { HonestyCalculator, canShowVerdict, honestyIcon } from '@/core/HonestyCalculator';
+import { confirmedDays, DAY_MS, historyPresentation } from '@/core/history';
 
-describe('HonestyCalculator', () => {
-  const asAnalyzedDetails = (details: unknown) => details as {
-    hasSpike?: boolean;
-    min30?: number;
-    median60?: number;
-    // legacy aliases (still present for backward compat)
-    min90?: number;
-    max90?: number;
-    median90?: number;
-    trend?: 'rising' | 'falling' | 'stable';
-    isVolatile?: boolean;
-  };
+const now = Date.parse('2026-10-19T12:00:00Z');
+const point = (days: number, price = 1000) => ({ price, date: now - days * DAY_MS, source: 'system' });
+const dense = (count: number, price = 1000) => Array.from({ length: count }, (_, i) => point(count - 1 - i, price));
+const calculate = (price: number, history = dense(30), regularPrice?: number) => HonestyCalculator.calculate(price, history, 'unknown', { now, regularPrice });
+beforeEach(() => { vi.useFakeTimers(); vi.setSystemTime(now); });
 
-  // ── Existing tests (updated field names where needed) ────────
-
-  it('returns informative single-price state when there is exactly one valid history point', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const result = HonestyCalculator.calculate(1000, [{ price: 1000, date: now - 7 * day }], 'Загальна');
-
-    expect(result.score).toBe(-1);
+describe('daily evidence and price value', () => {
+  it('rejects invalid current prices and untrusted, future or invalid observations', () => {
+    expect(calculate(Infinity).state).toBe('invalid');
+    expect(calculate(0).state).toBe('invalid');
+    expect(calculate(1000, [{ ...point(0), price: Infinity }, point(-1), { ...point(0), source: 'community' }]).state).toBe('collecting');
+  });
+  it('uses exactly 60 UTC dates, including the entire oldest day', () => {
+    const start = Date.parse('2026-08-21T00:00:00Z');
+    expect(confirmedDays([{ price: 1, date: start }, { price: 2, date: start - 1 }, point(0)], 60, now).map(p => p.price)).toEqual([1, 1000]);
+  });
+  it('uses the latest same-day observation without increasing evidence', () => {
+    const result = calculate(1000, [point(0, 900), point(0), { ...point(0, 1100), date: now - 1 }]);
     expect(result.state).toBe('single-price');
-    expect(result.messageKey).toBe('calculator.firstPriceSame');
-    expect(result.details?.entryCount).toBe(1);
-    expect(result.details?.daysAtObservedPrice).toBe(0);
-    expect(result.reasonCodes).toContain('INSUFFICIENT_HISTORY');
+    expect(result.details).toMatchObject({ entryCount: 1, observedPrice: 1000, daysAtObservedPrice: 0 });
   });
-
-  it('returns collecting state with observedPrices when history has two valid points', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const result = HonestyCalculator.calculate(1000, [
-      { price: 1000, date: now - 7 * day },
-      { price: 980, date: now - 2 * day },
-    ], 'Загальна');
-
-    expect(result.score).toBe(-1);
-    expect(result.state).toBe('collecting');
-    expect(result.messageKey).toBe('calculator.collecting');
-    expect(result.details?.entryCount).toBe(2);
-    expect(result.details?.observedPrices).toBeDefined();
-    expect(result.details?.observedPrices?.length).toBe(2);
-    expect(result.details?.observedPrices?.[0]?.price).toBe(1000);
-    expect(result.details?.observedPrices?.[1]?.price).toBe(980);
-    expect(result.reasonCodes).toContain('INSUFFICIENT_HISTORY');
+  it('rejects an inconsistent server day', () => {
+    expect(confirmedDays([{ ...point(0), day: '2026-10-18' }], 60, now)).toEqual([]);
   });
-
-  it('score is ~50 when currentPrice equals median (normal price)', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const history = [
-      { price: 1000, date: now - 30 * day },
-      { price: 1000, date: now - 20 * day },
-      { price: 1000, date: now - 10 * day },
-    ];
-    const result = HonestyCalculator.calculate(1000, history, 'Загальна');
-    expect(result.state).toBe('analyzed');
+  it('keeps zero, one and two day states distinct', () => {
+    expect(calculate(1000, []).state).toBe('collecting');
+    expect(calculate(1000, dense(1)).state).toBe('single-price');
+    expect(calculate(1000, dense(2)).details?.observedPrices).toHaveLength(2);
+  });
+  it.each([[1000, 50], [600, 70], [1400, 30], [3000, 0]])('price %s gives value %s', (price, score) => {
+    expect(calculate(price).score).toBe(score);
+  });
+  it('retains daily weights and kopecks in the median', () => {
+    const result = calculate(1000.01, [point(3, 1000.01), point(2, 1000.01), point(1, 1000.01), point(0, 2000)]);
+    expect(result.metrics?.median60).toBe(1000.01);
     expect(result.score).toBe(50);
   });
-
-  it('score > 50 when currentPrice is below median (good deal)', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const history = [
-      { price: 1000, date: now - 30 * day },
-      { price: 1000, date: now - 20 * day },
-      { price: 1000, date: now - 10 * day },
-    ];
-    const result = HonestyCalculator.calculate(800, history, 'Загальна');
-    expect(result.state).toBe('analyzed');
-    expect(result.score).toBeGreaterThan(50);
-    expect(result.score).toBeLessThanOrEqual(100);
+  it('computes min30 from exactly the last 30 UTC dates', () => {
+    const result = calculate(1000, [point(30, 1), point(29, 900), point(0, 1000)]);
+    expect(result.metrics?.min30).toBe(900);
+    expect(calculate(1000, [point(40), point(45), point(50)]).state).toBe('collecting');
   });
-
-  it('score < 50 when currentPrice is above median (overpriced)', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const history = [
-      { price: 1000, date: now - 30 * day },
-      { price: 1000, date: now - 20 * day },
-      { price: 1000, date: now - 10 * day },
-    ];
-    const result = HonestyCalculator.calculate(1200, history, 'Загальна');
-    expect(result.state).toBe('analyzed');
-    expect(result.score).toBeLessThan(50);
-  });
-
-  it('flags pre-inflation spike pattern with hasSpike=true', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const history = [
-      { price: 1000, date: now - 60 * day },
-      { price: 1020, date: now - 45 * day },
-      { price: 980,  date: now - 30 * day },
-      { price: 1600, date: now - 5  * day },  // spike
-      { price: 1580, date: now - 2  * day },  // still high
-    ];
-    const result = HonestyCalculator.calculate(1100, history, 'Загальна');
-    const analyzed = asAnalyzedDetails(result.details);
-    expect(result.state).toBe('analyzed');
-    expect(analyzed.hasSpike).toBe(true);
-    expect(result.messageKey).toContain('calculator.spike');
-    expect(result.reasonCodes).toContain('SPIKE_14D_DETECTED');
-  });
-
-  it('returns bounded score [0,100] for any valid inputs', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const history = [
-      { price: 2500, date: now - 55 * day },
-      { price: 2450, date: now - 35 * day },
-      { price: 2400, date: now - 21 * day },
-      { price: 2300, date: now - 10 * day },
-      { price: 2200, date: now - 2 * day },
-    ];
-    const result = HonestyCalculator.calculate(2200, history, 'Загальна');
-    const analyzed = asAnalyzedDetails(result.details);
-    expect(result.score).toBeGreaterThanOrEqual(0);
-    expect(result.score).toBeLessThanOrEqual(100);
-    expect(result.state).toBe('analyzed');
-    expect(analyzed.min30).toBeDefined();
-    expect(analyzed.median60).toBeDefined();
-    expect(analyzed.trend).toBeDefined();
-    // legacy aliases still present
-    expect(analyzed.min90).toBeDefined();
-    expect(analyzed.max90).toBeDefined();
-    expect(analyzed.median90).toBeDefined();
-  });
-
-  it('detects volatile product when price swings are large', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const history = [
-      { price: 500,  date: now - 50 * day },
-      { price: 900,  date: now - 40 * day },
-      { price: 400,  date: now - 30 * day },
-      { price: 1100, date: now - 20 * day },
-      { price: 450,  date: now - 10 * day },
-    ];
-    const result = HonestyCalculator.calculate(700, history, 'Загальна');
-    const analyzed = asAnalyzedDetails(result.details);
-    expect(result.state).toBe('analyzed');
-    expect(analyzed.isVolatile).toBe(true);
-  });
-
-  // ── V2-specific tests ────────────────────────────────────────
-
-  it('returns verdict "fair" when score >= 65', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    // price well below median → high score
-    const history = [
-      { price: 1000, date: now - 40 * day },
-      { price: 1000, date: now - 25 * day },
-      { price: 1000, date: now - 10 * day },
-    ];
-    const result = HonestyCalculator.calculate(600, history, 'Загальна');
-    expect(result.state).toBe('analyzed');
-    expect(result.verdict).toBe('fair');
-    expect(result.score).toBeGreaterThanOrEqual(65);
-  });
-
-  it('returns verdict "risky" when score < 40', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    // price far above median + spike penalty
-    const history = [
-      { price: 1000, date: now - 60 * day },
-      { price: 1010, date: now - 45 * day },
-      { price: 990,  date: now - 30 * day },
-      { price: 1600, date: now - 5  * day },
-      { price: 1590, date: now - 2  * day },
-    ];
-    const result = HonestyCalculator.calculate(1400, history, 'Загальна');
-    expect(result.state).toBe('analyzed');
-    expect(result.verdict).toBe('risky');
-    expect(result.score).toBeLessThan(40);
-  });
-
-  it('includes SPIKE_14D_DETECTED in reasonCodes on known spike scenario', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const history = [
-      { price: 1000, date: now - 60 * day },
-      { price: 1000, date: now - 40 * day },
-      { price: 1000, date: now - 25 * day },
-      { price: 1400, date: now - 7  * day },  // spike >25% above old median
-    ];
-    const result = HonestyCalculator.calculate(1000, history, 'tools');
-    expect(result.reasonCodes).toContain('SPIKE_14D_DETECTED');
-    expect(result.metrics?.spike14Pct).toBeGreaterThan(0);
-    expect(result.metrics?.penalty).toBeGreaterThan(0);
-  });
-
-  it('includes PRICE_NEAR_MIN30 when current price is at or below min30 * 1.05', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const history = [
-      { price: 1200, date: now - 55 * day },
-      { price: 1150, date: now - 40 * day },
-      { price: 1100, date: now - 28 * day },
-      { price: 900,  date: now - 15 * day },  // low point in 30d window
-      { price: 950,  date: now - 5  * day },
-    ];
-    // current price ≤ min30 * 1.05 → PRICE_NEAR_MIN30
-    const result = HonestyCalculator.calculate(900, history, 'Загальна');
-    expect(result.reasonCodes).toContain('PRICE_NEAR_MIN30');
-  });
-
-  it('includes HIGH_CATEGORY_VOLATILITY for fmcg category with wide swings', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    // fmcg warningBandPct = 0.08 — even moderate swings should trigger
-    const history = [
-      { price: 100, date: now - 50 * day },
-      { price: 200, date: now - 35 * day },
-      { price: 80,  date: now - 20 * day },
-      { price: 220, date: now - 10 * day },
-      { price: 90,  date: now - 3  * day },
-    ];
-    const result = HonestyCalculator.calculate(150, history, 'fmcg');
-    expect(result.reasonCodes).toContain('HIGH_CATEGORY_VOLATILITY');
+  it('keeps volatility separate from economic value', () => {
+    const result = calculate(1000, [point(3, 500), point(2, 1000), point(1, 1000), point(0, 1500)]);
     expect(result.details?.isVolatile).toBe(true);
+    expect(result.metrics?.penalty).toBe(0);
+    expect(result.score).toBe(50);
   });
+  it('gates confidence at 14/30 days and the coverage thresholds', () => {
+    expect(calculate(1000, dense(13)).confidence?.level).toBe('low');
+    expect(calculate(1000, dense(14)).confidence?.level).toBe('medium');
+    expect(calculate(1000, dense(30)).confidence?.level).toBe('high');
+    const seventy = [...dense(13), point(19)];
+    expect(calculate(1000, seventy).confidence).toMatchObject({ level: 'medium', coverage: .7, spanDays: 20 });
+    expect(calculate(1000, [...dense(13), point(20)]).confidence?.level).toBe('low');
+  });
+  it('rechecks freshness independently of confidence and hides a stale verdict', () => {
+    const history = dense(30).map(p => ({ ...p, date: p.date - 2 * DAY_MS }));
+    expect(calculate(600, history).confidence?.stale).toBe(false);
+    history.forEach(p => p.date--);
+    const stale = calculate(600, history);
+    expect(stale.confidence?.stale).toBe(true);
+    expect(stale.verdict).toBeUndefined();
+    expect(honestyIcon(stale)).toBe('inactive');
+  });
+  it('uses matching verdict/icon thresholds with neutral preliminary and warning states', () => {
+    expect(honestyIcon(calculate(600))).toBe('success');
+    expect(honestyIcon(calculate(1200))).toBe('inactive');
+    expect(honestyIcon(calculate(1220))).toBe('error');
+    expect(honestyIcon(calculate(600, dense(3)))).toBe('inactive');
+    expect(canShowVerdict(calculate(600, dense(3)))).toBe(false);
+  });
+});
 
-  it('INSUFFICIENT_HISTORY in reasonCodes when 60d window < 3 points', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    // All history older than 60 days
-    const history = [
-      { price: 1000, date: now - 90 * day },
-      { price: 1050, date: now - 80 * day },
-      { price: 1020, date: now - 70 * day },
-    ];
-    const result = HonestyCalculator.calculate(1000, history, 'Загальна');
-    expect(result.state).toBe('collecting');
-    expect(result.metrics).toBeUndefined();
-    expect(result.reasonCodes).toContain('INSUFFICIENT_HISTORY');
+describe('promotion evidence', () => {
+  const pattern = () => [...dense(7).map(p => ({ ...p, date: p.date - 20 * DAY_MS })), point(5, 1500), point(4, 1450), point(0)];
+  it('requires an advertised discount, seven older days and adjacent raised days', () => {
+    const result = calculate(1000, pattern(), 1500);
+    expect(result.discount?.status).toBe('suspicious-pattern');
+    expect(result.details?.hasSpike).toBe(true);
+    expect(result.metrics?.penalty).toBe(0);
+    expect(calculate(1000, pattern()).discount?.status).toBe('not-advertised');
+    expect(calculate(1000, pattern().slice(1), 1500).discount?.status).toBe('insufficient-data');
+    const gap = pattern(); gap[8] = point(2, 1450);
+    expect(calculate(1000, gap, 1500).discount?.status).toBe('no-suspicious-pattern');
   });
+  it('never invents an older baseline from recent points', () => {
+    expect(calculate(1000, [point(5, 1500), point(4, 1500), point(0)], 1600).discount?.status).toBe('insufficient-data');
+  });
+});
 
-  it('metrics object is present and has expected shape on analyzed result', () => {
-    const now = Date.now();
-    const day = 24 * 60 * 60 * 1000;
-    const history = [
-      { price: 1000, date: now - 50 * day },
-      { price: 1000, date: now - 30 * day },
-      { price: 1000, date: now - 10 * day },
-    ];
-    const result = HonestyCalculator.calculate(1000, history, 'Загальна');
-    expect(result.metrics).toBeDefined();
-    expect(typeof result.metrics?.median60).toBe('number');
-    expect(typeof result.metrics?.min30).toBe('number');
-    expect(typeof result.metrics?.spike14Pct).toBe('number');
-    expect(typeof result.metrics?.penalty).toBe('number');
+describe('period presentation', () => {
+  it('groups only adjacent identical full states, preserving every daily weight', () => {
+    const history = [point(5, 300.99), point(4, 300.99), point(2, 300.99), { ...point(1, 300.99), oldPrice: 400 }, point(0, 300.99)];
+    const model = historyPresentation(history, 14, now);
+    expect(model.periods.map(p => p.count)).toEqual([2, 1, 1, 1]);
+    expect(model.periods.reduce((sum, p) => sum + p.count, 0)).toBe(model.points.length);
+    expect(model.chart.find(p => p.timestamp === now - 12 * 3600000 - 3 * DAY_MS)?.price).toBeNull();
+    expect(model.points[0]?.price).toBe(300.99);
   });
-
-  it('rejects infinite prices and excludes future/community observations', () => {
-    expect(HonestyCalculator.calculate(Infinity, []).state).toBe('invalid');
-    const now = Date.now();
-    expect(HonestyCalculator.calculate(1000, [
-      { price: Infinity, date: now }, { price: 1000, date: now + 86400000 },
-      { price: 1000, date: now, source: 'community' },
-    ]).state).toBe('collecting');
-  });
-  it('does not turn repeated observations on one day into a full analysis', () => {
-    const now = Date.now();
-    const result = HonestyCalculator.calculate(1000, [1, 2, 3].map(() => ({ price: 1000, date: now })));
-    expect(result.state).toBe('single-price');
-    expect(result.metrics).toBeUndefined();
-  });
-  it('does not label a minimum older than 30 days as a 30-day minimum', () => {
-    const now = Date.now();
-    const result = HonestyCalculator.calculate(1000, [40, 45, 50].map(days => ({ price: 1000, date: now - days * 86400000 })));
-    expect(result.state).toBe('collecting');
-    expect(result.metrics).toBeUndefined();
+  it('selects calendar windows rather than the last N observations', () => {
+    expect(historyPresentation([point(40), point(20), point(0)], 14, now).points).toHaveLength(1);
+    expect(historyPresentation([point(40), point(20), point(0)], 30, now).points).toHaveLength(2);
   });
 });
